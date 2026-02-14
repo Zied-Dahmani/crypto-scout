@@ -16,26 +16,25 @@ AI-powered system for discovering viral trends and matching them to low-cap cryp
 │  TREND AGENT    │           │         │  CRYPTO AGENT   │
 │  (LLM + Tools)  │           │         │  (LLM + Tools)  │
 ├─────────────────┤           │         ├─────────────────┤
-│ • Twitter API   │           │         │ • CoinGecko API │
-│ • Reddit API    │           │         │ • Matching Svc  │
-│ • Trend Scoring │           │         │ • Scoring Svc   │
+│ • Twitter Mock  │           │         │ • CoinGecko API │
+│ • Trend Scoring │           │         │ • Matching Svc  │
 └─────────────────┘           │         └─────────────────┘
                               │
                               ▼
                     ┌─────────────────┐
                     │  NOTIFICATIONS  │
-                    │ Telegram / WA   │
+                    │    WhatsApp     │
                     └─────────────────┘
 ```
 
 ## Features
 
 - **Multi-Agent Architecture**: LangGraph-powered supervisor orchestrating specialized agents
-- **Trend Discovery**: Real-time monitoring of Twitter and Reddit for viral topics
+- **Trend Discovery**: Twitter trend simulation with mock data (cost-optimized)
 - **Crypto Matching**: Semantic and keyword matching between trends and cryptocurrencies
 - **Low-Cap Focus**: Filters for coins under $1M market cap for maximum upside
 - **AI-Powered Analysis**: LLM agents reason about matches and generate recommendations
-- **Notifications**: Telegram or WhatsApp alerts for high-confidence opportunities
+- **WhatsApp Notifications**: Alerts via WhatsApp (Twilio) for high-confidence opportunities
 
 ## Quick Start
 
@@ -77,7 +76,7 @@ python main.py crypto --keywords penguin pepe
 crypto-scout/
 ├── agents/                 # LangGraph AI agents
 │   ├── tools/              # Agent tools
-│   │   ├── trend_tools.py  # Twitter/Reddit discovery
+│   │   ├── trend_tools.py  # Twitter discovery (mock)
 │   │   ├── crypto_tools.py # CoinGecko integration
 │   │   └── analysis_tools.py # Matching & scoring
 │   ├── llm.py              # LLM configuration
@@ -86,8 +85,14 @@ crypto-scout/
 │   └── supervisor.py       # Multi-agent orchestrator
 ├── services/               # Backend services
 │   ├── trend_sources/      # Social media integrations
+│   │   ├── base.py         # Abstract base class
+│   │   └── twitter.py      # Twitter mock data source
 │   ├── crypto_sources/     # Crypto data integrations
-│   ├── notifications/      # Telegram/WhatsApp
+│   │   ├── base.py         # Abstract base class
+│   │   └── coingecko.py    # CoinGecko API
+│   ├── notifications/      # Notification services
+│   │   ├── base.py         # Abstract base class
+│   │   └── whatsapp.py     # WhatsApp via Twilio
 │   └── matching.py         # Trend-crypto matching
 ├── models/                 # Pydantic data models
 ├── config/                 # Configuration
@@ -100,8 +105,7 @@ crypto-scout/
 ### 1. Trend Discovery Agent
 
 The trend agent uses an LLM with tools to:
-- Scan Twitter for crypto-related trending hashtags
-- Monitor Reddit crypto communities (r/cryptocurrency, r/CryptoMoonShots, etc.)
+- Fetch simulated Twitter trends (mock data for cost optimization)
 - Score trends by virality (engagement rate, growth speed)
 - Filter for potentially crypto-relevant trends
 
@@ -121,7 +125,7 @@ The supervisor orchestrates the workflow:
 2. Runs trend discovery agent
 3. Passes trends to crypto analysis agent
 4. Evaluates recommendations
-5. Sends notifications for high-confidence opportunities
+5. Sends WhatsApp notifications for high-confidence opportunities
 6. Generates summary report
 
 ## Configuration
@@ -138,25 +142,27 @@ ANTHROPIC_API_KEY=sk-ant-...
 LLM_PROVIDER=anthropic
 ```
 
-### Optional: Social Media APIs
+### Optional: CoinGecko API
 
-Without API keys, the system uses mock data for demonstration.
+For higher rate limits on crypto data:
+```bash
+COINGECKO_API_KEY=CG-...
+```
 
-**Twitter**: Get keys at [developer.twitter.com](https://developer.twitter.com)
+### Optional: WhatsApp Notifications
 
-**Reddit**: Create an app at [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps)
+WhatsApp notifications are sent via Twilio:
 
-### Optional: Notifications
-
-**Telegram**:
-1. Create a bot with [@BotFather](https://t.me/botfather)
-2. Get your chat ID
-3. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`
-
-**WhatsApp** (via Twilio):
 1. Sign up at [twilio.com](https://www.twilio.com)
 2. Enable WhatsApp sandbox
-3. Set Twilio credentials
+3. Set Twilio credentials:
+
+```bash
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_WHATSAPP_FROM=+14155238886
+TWILIO_WHATSAPP_TO=+1234567890
+```
 
 ## Example Output
 

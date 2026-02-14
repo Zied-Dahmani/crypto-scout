@@ -11,10 +11,10 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from .llm import get_llm
-from services.trend_sources import TwitterTrendSource, RedditTrendSource
+from services.trend_sources import TwitterTrendSource
 from services.crypto_sources import CoinGeckoSource
 from services.matching import MatchingService, RecommendationEngine
-from services.notifications import TelegramNotificationService, WhatsAppNotificationService
+from services.notifications import WhatsAppNotificationService
 from config.settings import config
 from utils.logger import get_logger
 
@@ -43,7 +43,6 @@ class CryptoScoutSupervisor:
 
         # Initialize services
         self.twitter_source = TwitterTrendSource()
-        self.reddit_source = RedditTrendSource()
         self.crypto_source = CoinGeckoSource()
         self.matching_service = MatchingService()
         self.recommendation_engine = RecommendationEngine()
@@ -51,21 +50,13 @@ class CryptoScoutSupervisor:
         # Initialize LLM
         self.llm = get_llm()
 
-        # Initialize notifications
-        self._init_notification_service()
+        # Initialize notifications (WhatsApp only)
+        self.notifier = WhatsAppNotificationService()
+        if not self.notifier.is_configured():
+            logger.warning("WhatsApp notifications not configured, will log only")
 
         # Build the graph
         self.graph = self._build_graph()
-
-    def _init_notification_service(self):
-        """Initialize notification service based on config."""
-        if config.notification_provider == "whatsapp":
-            self.notifier = WhatsAppNotificationService()
-        else:
-            self.notifier = TelegramNotificationService()
-
-        if not self.notifier.is_configured():
-            logger.warning("Notifications not configured, will log only")
 
     def _build_graph(self) -> StateGraph:
         """Build the supervisor orchestration graph."""
@@ -79,27 +70,19 @@ class CryptoScoutSupervisor:
             }
 
         async def trend_discovery_node(state: SupervisorState) -> dict:
-            """Discover trends from social media."""
-            logger.info("Supervisor: Discovering trends...")
+            """Discover trends from Twitter (mock data)."""
+            logger.info("Supervisor: Discovering trends from Twitter...")
 
             trends = []
             errors = state.get("errors", [])
 
             try:
-                # Fetch from Twitter
+                # Fetch from Twitter (mock data)
                 twitter_trends = await self.twitter_source.fetch_trends(limit=10)
                 trends.extend(twitter_trends)
             except Exception as e:
                 logger.error(f"Twitter fetch failed: {e}")
                 errors.append(f"Twitter: {str(e)}")
-
-            try:
-                # Fetch from Reddit
-                reddit_trends = await self.reddit_source.fetch_trends(limit=10)
-                trends.extend(reddit_trends)
-            except Exception as e:
-                logger.error(f"Reddit fetch failed: {e}")
-                errors.append(f"Reddit: {str(e)}")
 
             # Convert to dict for state
             trends_data = [
@@ -112,22 +95,14 @@ class CryptoScoutSupervisor:
                 for t in trends
             ]
 
-            # Deduplicate by keyword
-            seen = set()
-            unique_trends = []
-            for t in trends_data:
-                if t["keyword"] not in seen:
-                    seen.add(t["keyword"])
-                    unique_trends.append(t)
-
             # Sort by virality
-            unique_trends.sort(key=lambda x: x["virality"], reverse=True)
+            trends_data.sort(key=lambda x: x["virality"], reverse=True)
 
-            logger.info(f"Discovered {len(unique_trends)} unique trends")
+            logger.info(f"Discovered {len(trends_data)} trends")
 
             return {
-                "trends": unique_trends[:10],
-                "messages": [AIMessage(content=f"📊 Found {len(unique_trends)} trends")],
+                "trends": trends_data[:10],
+                "messages": [AIMessage(content=f"📊 Found {len(trends_data)} trends")],
                 "errors": errors,
                 "current_step": "crypto_analysis",
             }
@@ -391,7 +366,7 @@ RECOMMENDATION 1:
                                  ▼
                     ┌─────────────────────────┐
                     │    TREND DISCOVERY      │
-                    │  Twitter + Reddit Scan  │
+                    │   Twitter (Mock Data)   │
                     └────────────┬────────────┘
                                  │
                                  ▼
@@ -403,7 +378,7 @@ RECOMMENDATION 1:
                                  ▼
                     ┌─────────────────────────┐
                     │     NOTIFICATIONS       │
-                    │    Telegram / WA        │
+                    │       WhatsApp          │
                     └────────────┬────────────┘
                                  │
                                  ▼

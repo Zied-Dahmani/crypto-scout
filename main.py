@@ -4,6 +4,7 @@ Crypto Scout - AI-powered viral trend and low-cap crypto discovery system.
 This is the main entry point for running the crypto scout system.
 """
 
+import os
 import asyncio
 import argparse
 from datetime import datetime, timezone
@@ -215,10 +216,16 @@ def main():
     args = parser.parse_args()
 
     # Validate configuration
-    if not config.llm.openai_api_key and not config.llm.anthropic_api_key:
+    has_llm = (
+        os.getenv("GROQ_API_KEY") or
+        os.getenv("GOOGLE_API_KEY") or
+        config.llm.openai_api_key or
+        config.llm.anthropic_api_key
+    )
+    if not has_llm:
         print("⚠️  WARNING: No LLM API key configured!")
-        print("Set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable.")
-        print("The system will use mock data for demonstration.\n")
+        print("Set one of: GROQ_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY")
+        print("The system will not work without an LLM provider.\n")
 
     # Run appropriate mode
     if args.mode == "scan":

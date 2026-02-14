@@ -22,24 +22,6 @@ class TwitterConfig:
 
 
 @dataclass
-class RedditConfig:
-    """Reddit API configuration."""
-    client_id: str = field(default_factory=lambda: os.getenv("REDDIT_CLIENT_ID", ""))
-    client_secret: str = field(default_factory=lambda: os.getenv("REDDIT_CLIENT_SECRET", ""))
-    user_agent: str = field(default_factory=lambda: os.getenv("REDDIT_USER_AGENT", "crypto-scout/1.0"))
-    # Crypto-related subreddits to monitor
-    subreddits: list[str] = field(default_factory=lambda: [
-        "cryptocurrency",
-        "CryptoMoonShots",
-        "SatoshiStreetBets",
-        "altcoin",
-        "defi",
-        "memecoins",
-        "wallstreetbetscrypto",
-    ])
-
-
-@dataclass
 class CoinGeckoConfig:
     """CoinGecko API configuration."""
     api_key: str = field(default_factory=lambda: os.getenv("COINGECKO_API_KEY", ""))
@@ -47,13 +29,6 @@ class CoinGeckoConfig:
     pro_base_url: str = "https://pro-api.coingecko.com/api/v3"
     # Market cap threshold in USD
     max_market_cap: float = 1_000_000  # $1 million
-
-
-@dataclass
-class TelegramConfig:
-    """Telegram Bot configuration."""
-    bot_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
-    chat_id: str = field(default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", ""))
 
 
 @dataclass
@@ -78,9 +53,7 @@ class LLMConfig:
 class AppConfig:
     """Main application configuration."""
     twitter: TwitterConfig = field(default_factory=TwitterConfig)
-    reddit: RedditConfig = field(default_factory=RedditConfig)
     coingecko: CoinGeckoConfig = field(default_factory=CoinGeckoConfig)
-    telegram: TelegramConfig = field(default_factory=TelegramConfig)
     whatsapp: WhatsAppConfig = field(default_factory=WhatsAppConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
 
@@ -91,9 +64,6 @@ class AppConfig:
     # Crypto scanning settings
     crypto_refresh_interval: int = 60  # 1 minute
     min_confidence_score: float = 0.6
-
-    # Notification settings
-    notification_provider: str = field(default_factory=lambda: os.getenv("NOTIFICATION_PROVIDER", "telegram"))
 
     @classmethod
     def from_env(cls) -> "AppConfig":

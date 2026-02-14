@@ -1,11 +1,7 @@
-"""Twitter/X trend source implementation."""
+"""Twitter/X trend source implementation (using mock data)."""
 
 import hashlib
 from datetime import datetime
-from typing import Optional
-
-import tweepy
-from tweepy import TweepyException
 
 from config.settings import config
 from models.trend import Trend, TrendSource
@@ -16,144 +12,54 @@ logger = get_logger(__name__)
 
 
 class TwitterTrendSource(BaseTrendSource):
-    """Twitter/X trend detection using the Twitter API v2."""
+    """Twitter/X trend detection using mock data (API disabled for cost reduction)."""
 
     source_type = TrendSource.TWITTER
 
     def __init__(self):
         self.config = config.twitter
-        self.client: Optional[tweepy.Client] = None
-        self._init_client()
-
-    def _init_client(self) -> None:
-        """Initialize the Twitter API client."""
-        if not self.is_configured():
-            logger.warning("Twitter API not configured, using mock data")
-            return
-
-        try:
-            self.client = tweepy.Client(
-                bearer_token=self.config.bearer_token,
-                consumer_key=self.config.api_key,
-                consumer_secret=self.config.api_secret,
-                access_token=self.config.access_token,
-                access_token_secret=self.config.access_token_secret,
-                wait_on_rate_limit=True,
-            )
-            logger.info("Twitter client initialized successfully")
-        except Exception as e:
-            logger.error("Failed to initialize Twitter client", error=str(e))
-            self.client = None
+        # API client initialization disabled - using mock data only
+        logger.info("Twitter source initialized (using mock data for cost reduction)")
 
     def is_configured(self) -> bool:
-        """Check if Twitter API is configured."""
-        return bool(self.config.bearer_token)
+        """Always returns True since we use mock data."""
+        return True
 
     async def fetch_trends(self, limit: int = 50) -> list[Trend]:
         """
-        Fetch trending topics from Twitter.
+        Fetch trending topics from Twitter (using mock data).
 
-        Note: Twitter API v2 has limited trending endpoint access.
-        This implementation searches for crypto-related trending terms.
+        Note: Real API calls are disabled for cost reduction.
+        Returns simulated trending crypto topics with realistic metrics.
         """
-        if not self.client:
-            logger.warning("Twitter client not available, returning mock trends")
-            return self._get_mock_trends(limit)
-
-        trends = []
-        crypto_keywords = [
-            "crypto", "bitcoin", "ethereum", "memecoin", "defi",
-            "nft", "web3", "altcoin", "token", "blockchain"
-        ]
-
-        try:
-            for keyword in crypto_keywords[:5]:  # Limit API calls
-                response = self.client.search_recent_tweets(
-                    query=f"{keyword} -is:retweet lang:en",
-                    max_results=min(limit, 100),
-                    tweet_fields=["created_at", "public_metrics", "entities"],
-                )
-
-                if response.data:
-                    trend = self._process_search_results(keyword, response)
-                    if trend:
-                        trends.append(trend)
-
-        except TweepyException as e:
-            logger.error("Twitter API error", error=str(e))
-        except Exception as e:
-            logger.error("Unexpected error fetching Twitter trends", error=str(e))
-
-        return trends[:limit]
-
-    def _process_search_results(self, keyword: str, response) -> Optional[Trend]:
-        """Process Twitter search results into a Trend object."""
-        tweets = response.data or []
-        if not tweets:
-            return None
-
-        total_engagement = 0
-        hashtags = set()
-
-        for tweet in tweets:
-            metrics = tweet.public_metrics or {}
-            total_engagement += (
-                metrics.get("like_count", 0) +
-                metrics.get("retweet_count", 0) * 2 +
-                metrics.get("reply_count", 0)
-            )
-
-            if tweet.entities and tweet.entities.get("hashtags"):
-                for ht in tweet.entities["hashtags"]:
-                    hashtags.add(ht["tag"].lower())
-
-        raw_data = {
-            "tweet_count": len(tweets),
-            "total_engagement": total_engagement,
-            "hashtags": list(hashtags),
-        }
-
-        return Trend(
-            id=self._generate_trend_id(keyword),
-            keyword=keyword,
-            related_keywords=list(hashtags)[:10],
-            source=self.source_type,
-            virality_score=self.calculate_virality_score(raw_data),
-            growth_rate=self.calculate_growth_rate(raw_data),
-            volume=len(tweets),
-            sentiment_score=0.5,  # Would need NLP for real sentiment
-            raw_data=raw_data,
-        )
+        logger.info(f"Fetching Twitter trends (mock data, limit: {limit})")
+        return self._get_mock_trends(limit)
 
     async def search_keyword(self, keyword: str, limit: int = 100) -> dict:
-        """Search for specific keyword mentions on Twitter."""
-        if not self.client:
-            return {"error": "Twitter client not configured"}
+        """Search for specific keyword mentions on Twitter (mock data)."""
+        logger.info(f"Searching Twitter for '{keyword}' (mock data)")
 
-        try:
-            response = self.client.search_recent_tweets(
-                query=f"{keyword} -is:retweet",
-                max_results=min(limit, 100),
-                tweet_fields=["created_at", "public_metrics"],
-            )
-
-            tweets = response.data or []
-            return {
-                "keyword": keyword,
-                "count": len(tweets),
-                "tweets": [
-                    {
-                        "text": t.text[:200],
-                        "metrics": t.public_metrics,
-                        "created_at": t.created_at.isoformat() if t.created_at else None,
-                    }
-                    for t in tweets[:20]
-                ],
-            }
-
-        except TweepyException as e:
-            logger.error("Twitter search error", keyword=keyword, error=str(e))
-            return {"error": str(e)}
+        return {
+            "keyword": keyword,
+            "count": 150,
+            "tweets": [
+                {
+                    "text": f"🚀 {keyword.upper()} is going to the moon! #crypto #memecoin",
+                    "metrics": {"like_count": 245, "retweet_count": 89, "reply_count": 32},
+                    "created_at": datetime.utcnow().isoformat(),
+                },
+                {
+                    "text": f"Just bought some ${keyword.upper()}! Let's go! 🔥",
+                    "metrics": {"like_count": 128, "retweet_count": 45, "reply_count": 18},
+                    "created_at": datetime.utcnow().isoformat(),
+                },
+                {
+                    "text": f"${keyword.upper()} looking bullish today 📈",
+                    "metrics": {"like_count": 87, "retweet_count": 23, "reply_count": 12},
+                    "created_at": datetime.utcnow().isoformat(),
+                },
+            ],
+        }
 
     def calculate_virality_score(self, raw_data: dict) -> float:
         """Calculate virality score based on engagement metrics."""
@@ -209,12 +115,5 @@ class TwitterTrendSource(BaseTrendSource):
         return trends
 
     async def health_check(self) -> bool:
-        """Check Twitter API connectivity."""
-        if not self.client:
-            return False
-
-        try:
-            self.client.get_me()
-            return True
-        except Exception:
-            return False
+        """Health check always returns True for mock data."""
+        return True
