@@ -257,8 +257,93 @@ class CoinGeckoSource(BaseCryptoSource):
         return data is not None and data.get("gecko_says") is not None
 
     def _get_mock_coins(self, limit: int) -> list[Cryptocurrency]:
-        """Return mock coins for testing."""
+        """
+        Return mock coins for testing.
+
+        Includes coins matching:
+        - Mainstream viral trends (Moo Deng, Hawk Tuah, Chill Guy)
+        - Crypto-native memes (Penguin, Pepe themed)
+        """
         mock_data = [
+            # MAINSTREAM VIRAL TREND COINS
+            {
+                "id": "moo-deng",
+                "symbol": "moodeng",
+                "name": "Moo Deng",
+                "price": 0.00045,
+                "market_cap": 750000,
+                "volume": 280000,
+                "change_24h": 156.5,
+                "category": "viral-animal",
+                "description": "Baby hippo Moo Deng memecoin - the viral Thai zoo sensation",
+            },
+            {
+                "id": "hawk-tuah",
+                "symbol": "hawktuah",
+                "name": "Hawk Tuah",
+                "price": 0.000082,
+                "market_cap": 320000,
+                "volume": 145000,
+                "change_24h": 234.2,
+                "category": "viral-meme",
+                "description": "The viral meme girl hawk tuah coin",
+            },
+            {
+                "id": "chill-guy",
+                "symbol": "chillguy",
+                "name": "Chill Guy",
+                "price": 0.00028,
+                "market_cap": 580000,
+                "volume": 195000,
+                "change_24h": 89.3,
+                "category": "viral-meme",
+                "description": "The relatable chill guy meme token",
+            },
+            {
+                "id": "skibidi-token",
+                "symbol": "skibidi",
+                "name": "Skibidi Toilet",
+                "price": 0.000015,
+                "market_cap": 180000,
+                "volume": 72000,
+                "change_24h": 67.8,
+                "category": "viral-meme",
+                "description": "Gen Alpha's favorite meme as a token",
+            },
+            {
+                "id": "capybara-token",
+                "symbol": "capy",
+                "name": "Capybara",
+                "price": 0.00012,
+                "market_cap": 290000,
+                "volume": 88000,
+                "change_24h": 42.1,
+                "category": "viral-animal",
+                "description": "Ok I pull up - the chill capybara memecoin",
+            },
+            {
+                "id": "griddy-coin",
+                "symbol": "griddy",
+                "name": "Griddy",
+                "price": 0.000008,
+                "market_cap": 95000,
+                "volume": 35000,
+                "change_24h": 128.5,
+                "category": "viral-dance",
+                "description": "The viral dance celebration memecoin",
+            },
+            {
+                "id": "baby-hippo",
+                "symbol": "bhippo",
+                "name": "Baby Hippo",
+                "price": 0.000022,
+                "market_cap": 145000,
+                "volume": 52000,
+                "change_24h": 198.7,
+                "category": "viral-animal",
+                "description": "Another baby hippo themed token riding the Moo Deng wave",
+            },
+            # CRYPTO-NATIVE COINS
             {
                 "id": "pudgy-penguins-token",
                 "symbol": "pengu",
@@ -267,6 +352,8 @@ class CoinGeckoSource(BaseCryptoSource):
                 "market_cap": 850000,
                 "volume": 125000,
                 "change_24h": 45.5,
+                "category": "nft-meme",
+                "description": "Pudgy Penguins NFT community token",
             },
             {
                 "id": "penguin-finance",
@@ -276,33 +363,41 @@ class CoinGeckoSource(BaseCryptoSource):
                 "market_cap": 420000,
                 "volume": 85000,
                 "change_24h": 28.3,
+                "category": "defi",
+                "description": "Penguin themed DeFi protocol",
             },
             {
-                "id": "baby-penguin",
-                "symbol": "bpeng",
-                "name": "Baby Penguin",
+                "id": "mini-pepe",
+                "symbol": "minipepe",
+                "name": "Mini Pepe",
                 "price": 0.0000008,
                 "market_cap": 180000,
                 "volume": 45000,
                 "change_24h": 112.5,
+                "category": "meme",
+                "description": "Smaller pepe for the people",
             },
             {
-                "id": "arctic-token",
-                "symbol": "arctic",
-                "name": "Arctic Token",
+                "id": "trump-maga",
+                "symbol": "trumpmaga",
+                "name": "Trump MAGA",
+                "price": 0.00035,
+                "market_cap": 920000,
+                "volume": 310000,
+                "change_24h": 55.2,
+                "category": "political",
+                "description": "Political memecoin for Trump supporters",
+            },
+            {
+                "id": "elon-doge",
+                "symbol": "elondoge",
+                "name": "Elon Doge",
                 "price": 0.000045,
                 "market_cap": 650000,
                 "volume": 95000,
                 "change_24h": 18.7,
-            },
-            {
-                "id": "ice-penguin",
-                "symbol": "icep",
-                "name": "Ice Penguin",
-                "price": 0.00000012,
-                "market_cap": 95000,
-                "volume": 22000,
-                "change_24h": 85.2,
+                "category": "celebrity",
+                "description": "Elon Musk inspired doge token",
             },
         ]
 
@@ -316,9 +411,9 @@ class CoinGeckoSource(BaseCryptoSource):
                 market_cap_usd=data["market_cap"],
                 volume_24h_usd=data["volume"],
                 price_change_24h_pct=data["change_24h"],
-                price_change_7d_pct=data["change_24h"] * 1.5,
-                description=f"Mock {data['name']} token for testing",
-                categories=["meme-token"],
+                price_change_7d_pct=data["change_24h"] * 1.2,
+                description=data.get("description", f"Mock {data['name']} token"),
+                categories=[data.get("category", "meme-token")],
                 last_updated=datetime.now(timezone.utc),
             ))
 

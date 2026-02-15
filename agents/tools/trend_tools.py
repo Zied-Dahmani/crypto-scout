@@ -80,8 +80,44 @@ async def search_social_topic(topic: str) -> str:
     return result
 
 
+@tool
+async def discover_crypto_mentions(limit: int = 10) -> str:
+    """
+    Discover viral crypto-specific posts from Twitter/X.
+    This scans for direct coin mentions like $PENGU, $PEPE, $WIF etc.
+    Returns coins being actively discussed with sentiment and engagement metrics.
+
+    Args:
+        limit: Maximum number of coins to return (default 10)
+
+    Returns:
+        List of crypto coins being mentioned with virality metrics
+    """
+    logger.info(f"Discovering crypto mentions on Twitter (limit: {limit})")
+
+    mentions = await twitter_source.fetch_crypto_mentions(limit=limit)
+
+    if not mentions:
+        return "No crypto mentions found."
+
+    result = f"💰 **Crypto Twitter Mentions** (Found {len(mentions)} coins being discussed):\n\n"
+    for m in mentions:
+        result += f"• **${m['symbol']}** ({m['name']})\n"
+        result += f"  Virality: {m['virality_score']:.0%} | "
+        result += f"Mentions: {m['mentions']:,} | "
+        result += f"Sentiment: {m['sentiment']:.0%} bullish\n"
+        result += f"  Influencers talking: {m['influencer_mentions']} | "
+        result += f"Avg engagement: {m['avg_engagement']}\n"
+        if m.get('sample_tweets'):
+            result += f"  📝 \"{m['sample_tweets'][0][:60]}...\"\n"
+        result += "\n"
+
+    return result
+
+
 # Export all trend tools
 TREND_TOOLS = [
     discover_twitter_trends,
+    discover_crypto_mentions,
     search_social_topic,
 ]
