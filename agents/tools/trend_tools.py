@@ -4,14 +4,13 @@ Trend discovery tools for the AI agents.
 
 from langchain_core.tools import tool
 
-from services.trend_sources import TwitterTrendSource, RedditTrendSource
+from services.trend_sources import TwitterTrendSource
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 # Initialize sources
 twitter_source = TwitterTrendSource()
-reddit_source = RedditTrendSource()
 
 
 @tool
@@ -47,80 +46,78 @@ async def discover_twitter_trends(limit: int = 10) -> str:
 
 
 @tool
-async def discover_reddit_trends(limit: int = 10) -> str:
+async def search_social_topic(topic: str) -> str:
     """
-    Discover viral trending topics from crypto Reddit communities.
-    Scans subreddits like r/cryptocurrency, r/CryptoMoonShots, r/SatoshiStreetBets.
+    Search for a specific topic on Twitter.
+    Use this to investigate a particular keyword or trend deeper.
 
     Args:
-        limit: Maximum number of trends to return (default 10)
+        topic: The topic/keyword to search for
 
     Returns:
-        List of trending topics with engagement metrics
+        Detailed search results with mention counts and examples
     """
-    logger.info(f"Discovering Reddit trends (limit: {limit})")
+    logger.info(f"Searching topic '{topic}' on Twitter")
 
-    trends = await reddit_source.fetch_trends(limit=limit)
+    twitter_results = await twitter_source.search_keyword(topic)
 
-    if not trends:
-        return "No Reddit trends found. API might not be configured."
+    if "error" in twitter_results:
+        return f"No results found for '{topic}'"
 
-    result = f"🔴 **Reddit Trends** (Found {len(trends)}):\n\n"
-    for t in trends:
-        result += f"• **{t.keyword}**\n"
-        result += f"  Virality: {t.virality_score:.0%} | "
-        result += f"Posts: {t.volume} | "
-        result += f"Sentiment: {t.sentiment_score:.0%}\n"
-        if t.raw_data.get("subreddits"):
-            result += f"  Subreddits: {', '.join(t.raw_data['subreddits'][:3])}\n"
-        result += "\n"
+    result = f"## Search Results: '{topic}'\n\n"
+    result += f"🐦 **Twitter Results:**\n"
+    result += f"  Mentions: {twitter_results.get('count', 0)}\n"
+
+    if twitter_results.get("tweets"):
+        result += "\n  **Sample tweets:**\n"
+        for tweet in twitter_results["tweets"][:3]:
+            result += f"    • {tweet['text'][:80]}...\n"
+            metrics = tweet.get("metrics", {})
+            result += f"      ❤️ {metrics.get('like_count', 0)} | "
+            result += f"🔄 {metrics.get('retweet_count', 0)} | "
+            result += f"💬 {metrics.get('reply_count', 0)}\n"
 
     return result
 
 
 @tool
-async def search_social_topic(topic: str, platform: str = "all") -> str:
+async def discover_crypto_mentions(limit: int = 10) -> str:
     """
-    Search for a specific topic across social media platforms.
-    Use this to investigate a particular keyword or trend deeper.
+    Discover viral crypto-specific posts from Twitter/X.
+    This scans for direct coin mentions like $PENGU, $PEPE, $WIF etc.
+    Returns coins being actively discussed with sentiment and engagement metrics.
 
     Args:
-        topic: The topic/keyword to search for
-        platform: Platform to search ('twitter', 'reddit', or 'all')
+        limit: Maximum number of coins to return (default 10)
 
     Returns:
-        Detailed search results with mention counts and examples
+        List of crypto coins being mentioned with virality metrics
     """
-    logger.info(f"Searching topic '{topic}' on {platform}")
+    logger.info(f"Discovering crypto mentions on Twitter (limit: {limit})")
 
-    results = []
+    mentions = await twitter_source.fetch_crypto_mentions(limit=limit)
 
-    if platform in ["twitter", "all"]:
-        twitter_results = await twitter_source.search_keyword(topic)
-        if "error" not in twitter_results:
-            results.append(f"🐦 **Twitter Results:**\n"
-                          f"  Mentions: {twitter_results.get('count', 0)}\n")
+    if not mentions:
+        return "No crypto mentions found."
 
-    if platform in ["reddit", "all"]:
-        reddit_results = await reddit_source.search_keyword(topic)
-        if "error" not in reddit_results:
-            results.append(f"🔴 **Reddit Results:**\n"
-                          f"  Posts: {reddit_results.get('count', 0)}\n")
-            if reddit_results.get("posts"):
-                results.append("  Top posts:\n")
-                for post in reddit_results["posts"][:3]:
-                    results.append(f"    • {post['title'][:60]}... "
-                                  f"(↑{post['score']})\n")
+    result = f"💰 **Crypto Twitter Mentions** (Found {len(mentions)} coins being discussed):\n\n"
+    for m in mentions:
+        result += f"• **${m['symbol']}** ({m['name']})\n"
+        result += f"  Virality: {m['virality_score']:.0%} | "
+        result += f"Mentions: {m['mentions']:,} | "
+        result += f"Sentiment: {m['sentiment']:.0%} bullish\n"
+        result += f"  Influencers talking: {m['influencer_mentions']} | "
+        result += f"Avg engagement: {m['avg_engagement']}\n"
+        if m.get('sample_tweets'):
+            result += f"  📝 \"{m['sample_tweets'][0][:60]}...\"\n"
+        result += "\n"
 
-    if not results:
-        return f"No results found for '{topic}' on {platform}"
-
-    return f"## Search Results: '{topic}'\n\n" + "\n".join(results)
+    return result
 
 
 # Export all trend tools
 TREND_TOOLS = [
     discover_twitter_trends,
-    discover_reddit_trends,
+    discover_crypto_mentions,
     search_social_topic,
 ]

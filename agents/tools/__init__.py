@@ -2,7 +2,6 @@
 
 from .trend_tools import (
     discover_twitter_trends,
-    discover_reddit_trends,
     search_social_topic,
     TREND_TOOLS,
 )
@@ -23,7 +22,6 @@ ALL_TOOLS = TREND_TOOLS + CRYPTO_TOOLS + ANALYSIS_TOOLS
 
 __all__ = [
     "discover_twitter_trends",
-    "discover_reddit_trends",
     "search_social_topic",
     "fetch_low_cap_cryptos",
     "search_crypto",

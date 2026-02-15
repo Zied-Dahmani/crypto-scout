@@ -11,10 +11,10 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from .llm import get_llm
-from services.trend_sources import TwitterTrendSource, RedditTrendSource
+from services.trend_sources import TwitterTrendSource
 from services.crypto_sources import CoinGeckoSource
 from services.matching import MatchingService, RecommendationEngine
-from services.notifications import TelegramNotificationService, WhatsAppNotificationService
+from services.notifications import WhatsAppNotificationService
 from config.settings import config
 from utils.logger import get_logger
 
@@ -43,7 +43,6 @@ class CryptoScoutSupervisor:
 
         # Initialize services
         self.twitter_source = TwitterTrendSource()
-        self.reddit_source = RedditTrendSource()
         self.crypto_source = CoinGeckoSource()
         self.matching_service = MatchingService()
         self.recommendation_engine = RecommendationEngine()
@@ -51,21 +50,13 @@ class CryptoScoutSupervisor:
         # Initialize LLM
         self.llm = get_llm()
 
-        # Initialize notifications
-        self._init_notification_service()
+        # Initialize notifications (WhatsApp only)
+        self.notifier = WhatsAppNotificationService()
+        if not self.notifier.is_configured():
+            logger.warning("WhatsApp notifications not configured, will log only")
 
         # Build the graph
         self.graph = self._build_graph()
-
-    def _init_notification_service(self):
-        """Initialize notification service based on config."""
-        if config.notification_provider == "whatsapp":
-            self.notifier = WhatsAppNotificationService()
-        else:
-            self.notifier = TelegramNotificationService()
-
-        if not self.notifier.is_configured():
-            logger.warning("Notifications not configured, will log only")
 
     def _build_graph(self) -> StateGraph:
         """Build the supervisor orchestration graph."""
@@ -79,55 +70,68 @@ class CryptoScoutSupervisor:
             }
 
         async def trend_discovery_node(state: SupervisorState) -> dict:
-            """Discover trends from social media."""
-            logger.info("Supervisor: Discovering trends...")
+            """Discover trends from Twitter using both approaches."""
+            logger.info("Supervisor: Discovering trends from Twitter...")
 
             trends = []
+            crypto_mentions = []
             errors = state.get("errors", [])
 
+            # APPROACH 1: General viral trends (penguin, pepe, etc.)
             try:
-                # Fetch from Twitter
+                logger.info("Fetching general viral trends...")
                 twitter_trends = await self.twitter_source.fetch_trends(limit=10)
                 trends.extend(twitter_trends)
             except Exception as e:
-                logger.error(f"Twitter fetch failed: {e}")
-                errors.append(f"Twitter: {str(e)}")
+                logger.error(f"Twitter trends fetch failed: {e}")
+                errors.append(f"Twitter trends: {str(e)}")
 
+            # APPROACH 2: Crypto-specific mentions ($PENGU, $PEPE, etc.)
             try:
-                # Fetch from Reddit
-                reddit_trends = await self.reddit_source.fetch_trends(limit=10)
-                trends.extend(reddit_trends)
+                logger.info("Fetching crypto-specific mentions...")
+                crypto_mentions = await self.twitter_source.fetch_crypto_mentions(limit=10)
             except Exception as e:
-                logger.error(f"Reddit fetch failed: {e}")
-                errors.append(f"Reddit: {str(e)}")
+                logger.error(f"Crypto mentions fetch failed: {e}")
+                errors.append(f"Crypto mentions: {str(e)}")
 
-            # Convert to dict for state
+            # Convert general trends to dict
             trends_data = [
                 {
                     "keyword": t.keyword,
                     "virality": t.virality_score,
                     "source": t.source.value,
                     "volume": t.volume,
+                    "type": "general_trend",
                 }
                 for t in trends
             ]
 
-            # Deduplicate by keyword
-            seen = set()
-            unique_trends = []
-            for t in trends_data:
-                if t["keyword"] not in seen:
-                    seen.add(t["keyword"])
-                    unique_trends.append(t)
+            # Convert crypto mentions to dict
+            mentions_data = [
+                {
+                    "keyword": f"${m['symbol']}",
+                    "symbol": m["symbol"],
+                    "name": m["name"],
+                    "virality": m["virality_score"],
+                    "source": "twitter_crypto",
+                    "volume": m["mentions"],
+                    "sentiment": m["sentiment"],
+                    "influencers": m["influencer_mentions"],
+                    "type": "direct_mention",
+                    "sample_tweet": m["sample_tweets"][0] if m.get("sample_tweets") else "",
+                }
+                for m in crypto_mentions
+            ]
 
-            # Sort by virality
-            unique_trends.sort(key=lambda x: x["virality"], reverse=True)
+            # Combine and sort by virality
+            all_trends = trends_data + mentions_data
+            all_trends.sort(key=lambda x: x["virality"], reverse=True)
 
-            logger.info(f"Discovered {len(unique_trends)} unique trends")
+            logger.info(f"Discovered {len(trends_data)} general trends + {len(mentions_data)} crypto mentions")
 
             return {
-                "trends": unique_trends[:10],
-                "messages": [AIMessage(content=f"📊 Found {len(unique_trends)} trends")],
+                "trends": all_trends[:15],
+                "messages": [AIMessage(content=f"📊 Found {len(trends_data)} general trends + {len(mentions_data)} crypto mentions")],
                 "errors": errors,
                 "current_step": "crypto_analysis",
             }
@@ -163,28 +167,40 @@ class CryptoScoutSupervisor:
 
                 # Use LLM to analyze matches
                 if trends and cryptos_data:
-                    analysis_prompt = f"""Analyze these trends and cryptocurrencies to find matches:
+                    # Separate general trends from direct mentions
+                    general_trends = [t for t in trends if t.get("type") == "general_trend"]
+                    direct_mentions = [t for t in trends if t.get("type") == "direct_mention"]
 
-TRENDS (sorted by virality):
-{self._format_trends(trends[:5])}
+                    analysis_prompt = f"""Analyze these trends and cryptocurrencies to find investment opportunities.
 
-LOW-CAP CRYPTOCURRENCIES:
+## APPROACH 1: GENERAL VIRAL TRENDS (find matching coins)
+These are viral topics - find cryptocurrencies that match thematically:
+{self._format_trends(general_trends[:5]) if general_trends else "None found"}
+
+## APPROACH 2: DIRECT CRYPTO MENTIONS (coins being hyped on crypto Twitter)
+These coins are being directly discussed with bullish sentiment:
+{self._format_crypto_mentions(direct_mentions[:5]) if direct_mentions else "None found"}
+
+## LOW-CAP CRYPTOCURRENCIES AVAILABLE:
 {self._format_cryptos(cryptos_data[:15])}
 
-For each potential match:
-1. Identify keyword/thematic connections
-2. Rate the match strength (0-100%)
-3. Assess risk level (EXTREME/HIGH/MEDIUM)
-4. Recommend action (BUY/CONSIDER/WATCH/SKIP)
+## YOUR TASK:
+1. For GENERAL TRENDS: Find thematic matches (e.g., "penguin" trend → penguin-themed coins)
+2. For DIRECT MENTIONS: These are already identified coins - assess if they're worth watching
+3. Rate each opportunity:
+   - Match Score (0-100%): How strong is the signal?
+   - Risk Level: EXTREME (< $100K MC) / HIGH (< $500K) / MEDIUM (< $1M)
+   - Action: BUY / CONSIDER / WATCH / SKIP
 
-Provide your top 3 recommendations in this format:
+Provide your top 5 recommendations in this format:
 RECOMMENDATION 1:
-- Trend: [trend keyword]
+- Trend: [trend keyword or $SYMBOL]
+- Type: [general_trend or direct_mention]
 - Crypto: [name] ([symbol])
 - Match Score: [X]%
 - Risk: [level]
 - Action: [action]
-- Reason: [brief reason]
+- Reason: [brief reason including why this signal matters]
 """
                     response = await self.llm.ainvoke([HumanMessage(content=analysis_prompt)])
 
@@ -279,11 +295,24 @@ RECOMMENDATION 1:
         return workflow.compile(checkpointer=self.checkpointer)
 
     def _format_trends(self, trends: list) -> str:
-        """Format trends for LLM prompt."""
+        """Format general trends for LLM prompt."""
         return "\n".join([
-            f"- {t['keyword']}: virality {t['virality']:.0%}, source: {t['source']}"
+            f"- {t['keyword']}: virality {t['virality']:.0%}, volume: {t.get('volume', 0):,}"
             for t in trends
         ])
+
+    def _format_crypto_mentions(self, mentions: list) -> str:
+        """Format crypto mentions for LLM prompt."""
+        lines = []
+        for m in mentions:
+            line = f"- {m['keyword']} ({m.get('name', 'Unknown')}): "
+            line += f"virality {m['virality']:.0%}, "
+            line += f"sentiment {m.get('sentiment', 0):.0%} bullish, "
+            line += f"{m.get('influencers', 0)} influencers talking"
+            if m.get('sample_tweet'):
+                line += f"\n  Tweet: \"{m['sample_tweet'][:80]}...\""
+            lines.append(line)
+        return "\n".join(lines)
 
     def _format_cryptos(self, cryptos: list) -> str:
         """Format cryptos for LLM prompt."""
@@ -304,6 +333,8 @@ RECOMMENDATION 1:
             line = line.strip()
             if line.startswith('- Trend:'):
                 current_rec['trend'] = line.replace('- Trend:', '').strip()
+            elif line.startswith('- Type:'):
+                current_rec['type'] = line.replace('- Type:', '').strip()
             elif line.startswith('- Crypto:'):
                 current_rec['crypto'] = line.replace('- Crypto:', '').strip()
             elif line.startswith('- Match Score:'):
@@ -325,16 +356,29 @@ RECOMMENDATION 1:
 
         # If no structured recommendations found, create from top matches
         if not recommendations and trends and cryptos:
-            recommendations = [
-                {
-                    'trend': trends[0]['keyword'] if trends else 'unknown',
-                    'crypto': cryptos[0]['name'] if cryptos else 'unknown',
-                    'score': 0.6,
-                    'risk': 'HIGH',
-                    'action': 'WATCH',
-                    'reason': 'Potential match based on market activity'
-                }
-            ]
+            # Try to create recommendations from both types
+            for trend in trends[:3]:
+                trend_type = trend.get('type', 'general_trend')
+                if trend_type == 'direct_mention':
+                    recommendations.append({
+                        'trend': trend['keyword'],
+                        'type': 'direct_mention',
+                        'crypto': f"{trend.get('name', 'Unknown')} ({trend.get('symbol', '?')})",
+                        'score': trend.get('virality', 0.6),
+                        'risk': 'HIGH',
+                        'action': 'WATCH',
+                        'reason': f"Being discussed on crypto Twitter with {trend.get('sentiment', 0):.0%} bullish sentiment"
+                    })
+                else:
+                    recommendations.append({
+                        'trend': trend['keyword'],
+                        'type': 'general_trend',
+                        'crypto': cryptos[0]['name'] if cryptos else 'unknown',
+                        'score': 0.5,
+                        'risk': 'HIGH',
+                        'action': 'WATCH',
+                        'reason': 'Viral trend - potential thematic match'
+                    })
 
         return recommendations[:5]
 
@@ -389,12 +433,15 @@ RECOMMENDATION 1:
                         └────────┬────────┘
                                  │
                                  ▼
-                    ┌─────────────────────────┐
-                    │    TREND DISCOVERY      │
-                    │  Twitter + Reddit Scan  │
-                    └────────────┬────────────┘
-                                 │
-                                 ▼
+           ┌─────────────────────────────────────────────┐
+           │            TREND DISCOVERY                   │
+           │  ┌─────────────────┐ ┌───────────────────┐  │
+           │  │ General Trends  │ │ Crypto Mentions   │  │
+           │  │ (viral topics)  │ │ ($PENGU, $PEPE)   │  │
+           │  └─────────────────┘ └───────────────────┘  │
+           └──────────────────────┬──────────────────────┘
+                                  │
+                                  ▼
                     ┌─────────────────────────┐
                     │    CRYPTO ANALYSIS      │
                     │  CoinGecko + LLM Match  │
@@ -403,7 +450,7 @@ RECOMMENDATION 1:
                                  ▼
                     ┌─────────────────────────┐
                     │     NOTIFICATIONS       │
-                    │    Telegram / WA        │
+                    │       WhatsApp          │
                     └────────────┬────────────┘
                                  │
                                  ▼

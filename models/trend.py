@@ -9,8 +9,6 @@ from pydantic import BaseModel, Field
 class TrendSource(str, Enum):
     """Source of the trending topic."""
     TWITTER = "twitter"
-    REDDIT = "reddit"
-    TELEGRAM = "telegram"
     DISCORD = "discord"
     CUSTOM = "custom"
 

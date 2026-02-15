@@ -39,13 +39,23 @@ class WhatsAppNotificationService(BaseNotificationService):
             self.client = None
 
     def is_configured(self) -> bool:
-        """Check if Twilio WhatsApp is configured."""
-        return bool(
-            self.config.account_sid and
-            self.config.auth_token and
-            self.config.from_number and
+        """Check if Twilio WhatsApp is configured with valid credentials."""
+        # Check all required fields exist
+        if not all([
+            self.config.account_sid,
+            self.config.auth_token,
+            self.config.from_number,
             self.config.to_number
-        )
+        ]):
+            return False
+
+        # Check for placeholder values
+        placeholders = ['your_', 'YOUR_', 'placeholder', 'PLACEHOLDER', 'xxx', 'XXX']
+        for field in [self.config.account_sid, self.config.auth_token]:
+            if any(p in field for p in placeholders):
+                return False
+
+        return True
 
     async def send_recommendation(self, recommendation: Recommendation) -> bool:
         """Send a recommendation via WhatsApp."""
