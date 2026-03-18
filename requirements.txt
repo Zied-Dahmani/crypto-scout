@@ -11,13 +11,8 @@ requests>=2.31.0
 certifi>=2024.0.0
 urllib3<2                 # pytrends compatibility
 
-# Trend sources
+# Trend validation
 pytrends>=4.9.2          # Google Trends (free, no key)
-tweepy>=4.14.0           # Twitter/X API (paid tier)
-twscrape>=0.12.0         # Twitter scraper (free, needs a regular Twitter account)
-TikTokApi>=6.4.0         # TikTok scraper
-playwright>=1.40.0       # Browser automation (run: playwright install chromium)
-playwright-stealth>=1.0.0  # Bypass headless browser detection
 
 # Data validation
 pydantic>=2.5.0
