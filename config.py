@@ -31,6 +31,8 @@ SOLSCAN_API_KEY: str = os.getenv("SOLSCAN_API_KEY", "")
 
 # --- TikTok scraper ---
 TIKTOK_MS_TOKEN: str = os.getenv("TIKTOK_MS_TOKEN", "")
+TIKTOK_USERNAME: str = os.getenv("TIKTOK_USERNAME", "")
+TIKTOK_PASSWORD: str = os.getenv("TIKTOK_PASSWORD", "")
 
 # --- Discord webhook ---
 DISCORD_WEBHOOK_URL: str = os.getenv("DISCORD_WEBHOOK_URL", "")
