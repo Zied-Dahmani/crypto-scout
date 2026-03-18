@@ -245,9 +245,9 @@ def _notify_session_expired():
                 "description": (
                     "The TikTok session has expired. The bot is using **mock TikTok data** until refreshed.\n\n"
                     "**To fix (2 min):**\n"
-                    "1. Open Chrome → go to **tiktok.com** → log in as `cryptoscout04`\n"
-                    "2. Open the **Cookie-Editor** extension → click **Export**\n"
-                    "3. Paste the cookies to the developer and they'll upload the new session"
+                    "1. Open Chrome → go to **tiktok.com** → click **Log in with Google** → use `cryptoscout04@gmail.com`\n"
+                    "2. Once logged in, open the **EditThisCookie** extension → click **Export**\n"
+                    "3. Paste the exported cookies to the developer to upload the new session"
                 ),
                 "color": 0xFF6600,
             }]
