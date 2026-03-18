@@ -3,15 +3,7 @@
 twscrape uses a regular free Twitter account (no paid API needed).
 It hits Twitter's internal mobile API, same as the official app.
 
-Setup (one-time, free):
-  1. Create a dummy Twitter account at twitter.com (use any email)
-  2. Add to .env:
-       TWITTER_SCRAPER_USERNAME=your_twitter_username
-       TWITTER_SCRAPER_PASSWORD=your_twitter_password
-       TWITTER_SCRAPER_EMAIL=your_email@gmail.com
-
-Fallback chain:
-  twscrape (free scraper) → mock data
+Fallback chain: twscrape → mock data
 """
 
 import asyncio
@@ -41,7 +33,6 @@ _scraper_ready: bool = False
 
 
 async def _ensure_scraper_ready(api) -> bool:
-    """Add account to pool and login if not already done."""
     global _scraper_ready
     if _scraper_ready:
         return True
@@ -65,7 +56,6 @@ async def _ensure_scraper_ready(api) -> bool:
 
 
 async def _scrape_mentions(keyword: str) -> int:
-    """Search recent tweets for a keyword using twscrape."""
     from twscrape import API, gather
 
     api = API(_DB_PATH)
@@ -75,7 +65,6 @@ async def _scrape_mentions(keyword: str) -> int:
     try:
         query = f'"{keyword}" -is:retweet lang:en'
         tweets = await gather(api.search(query, limit=100))
-        # Scale: 100 results (maxed) → 100_000 (normalized to 1.0 in validator)
         scaled = len(tweets) * 1_000
         logger.info(f"twitter: '{keyword}' → {len(tweets)} tweets (scaled={scaled:,})")
         return scaled
@@ -85,10 +74,7 @@ async def _scrape_mentions(keyword: str) -> int:
 
 
 def get_twitter_mentions(keyword: str) -> int:
-    """Return 24h Twitter mention count for a keyword.
-
-    Priority: twscrape (free) → mock
-    """
+    """Return mention count for a keyword. Falls back to mock on failure."""
     has_scraper = all([
         config.TWITTER_SCRAPER_USERNAME,
         config.TWITTER_SCRAPER_PASSWORD,

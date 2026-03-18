@@ -66,12 +66,12 @@ async def _setup_session() -> bool:
     print("=" * 60)
     print("A browser window will open.")
     print("→ Click 'Log in' → 'Continue with Google'")
-    print("→ Sign in with: cryptoscout04 / cryptoscout09")
+    print("→ Sign in with: cryptoscout04@gmail.com")
     print("→ Once on the TikTok homepage, come back here")
     print("=" * 60 + "\n")
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
+        browser = await p.chromium.launch(headless=False, channel="chrome")
         context = await browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -170,7 +170,7 @@ async def _scrape_trending() -> list[dict]:
             except Exception as e:
                 logger.debug(f"tiktok: {url} load error ({e})")
 
-        # Detect session expiry (redirected to login)
+        # Detect session expiry
         if "login" in page.url:
             logger.warning("tiktok: session expired — clearing saved session")
             _clear_session()
@@ -198,7 +198,6 @@ async def _scrape_trending() -> list[dict]:
             except Exception as e:
                 logger.debug(f"tiktok: page content extraction failed ({e})")
 
-        # Refresh saved session
         try:
             await context.storage_state(path=str(_SESSION_FILE))
         except Exception:
@@ -233,7 +232,6 @@ async def _scrape_trending() -> list[dict]:
 # ── Session expiry notification ───────────────────────────────────────────────
 
 def _notify_session_expired():
-    """Send a Discord alert when TikTok session expires."""
     webhook_url = config.DISCORD_WEBHOOK_URL
     if not webhook_url:
         return
@@ -353,14 +351,14 @@ def fetch_tiktok_trends() -> list[dict]:
 
 def _mock_trends() -> list[dict]:
     return [
-        {"keyword": "moo deng",      "hashtags": ["#moodeng", "#babyhippo"],      "views": 620_000_000,   "growth_rate": 345.0, "source": "tiktok_mock"},
-        {"keyword": "chill guy",     "hashtags": ["#chillguy", "#meme"],           "views": 980_000_000,   "growth_rate": 412.0, "source": "tiktok_mock"},
-        {"keyword": "skibidi",       "hashtags": ["#skibidi", "#genz"],             "views": 1_400_000_000, "growth_rate": 88.0,  "source": "tiktok_mock"},
-        {"keyword": "hawk tuah",     "hashtags": ["#hawktuah", "#viral"],           "views": 780_000_000,   "growth_rate": 290.0, "source": "tiktok_mock"},
-        {"keyword": "trump",         "hashtags": ["#trump", "#politics"],           "views": 2_100_000_000, "growth_rate": 520.0, "source": "tiktok_mock"},
-        {"keyword": "pepe",          "hashtags": ["#pepe", "#crypto"],              "views": 450_000_000,   "growth_rate": 180.0, "source": "tiktok_mock"},
-        {"keyword": "dogwifhat",     "hashtags": ["#dogwifhat", "#solana"],         "views": 320_000_000,   "growth_rate": 210.0, "source": "tiktok_mock"},
-        {"keyword": "capybara",      "hashtags": ["#capybara", "#cute"],            "views": 560_000_000,   "growth_rate": 95.0,  "source": "tiktok_mock"},
-        {"keyword": "griddy",        "hashtags": ["#griddy", "#nfl"],               "views": 290_000_000,   "growth_rate": 155.0, "source": "tiktok_mock"},
-        {"keyword": "pudgy penguin", "hashtags": ["#pudgypenguins", "#pengu"],      "views": 180_000_000,   "growth_rate": 230.0, "source": "tiktok_mock"},
+        {"keyword": "moo deng",      "hashtags": ["#moodeng"],      "views": 620_000_000,   "growth_rate": 345.0, "source": "tiktok_mock"},
+        {"keyword": "chill guy",     "hashtags": ["#chillguy"],      "views": 980_000_000,   "growth_rate": 412.0, "source": "tiktok_mock"},
+        {"keyword": "skibidi",       "hashtags": ["#skibidi"],        "views": 1_400_000_000, "growth_rate": 88.0,  "source": "tiktok_mock"},
+        {"keyword": "hawk tuah",     "hashtags": ["#hawktuah"],       "views": 780_000_000,   "growth_rate": 290.0, "source": "tiktok_mock"},
+        {"keyword": "trump",         "hashtags": ["#trump"],          "views": 2_100_000_000, "growth_rate": 520.0, "source": "tiktok_mock"},
+        {"keyword": "pepe",          "hashtags": ["#pepe"],           "views": 450_000_000,   "growth_rate": 180.0, "source": "tiktok_mock"},
+        {"keyword": "dogwifhat",     "hashtags": ["#dogwifhat"],      "views": 320_000_000,   "growth_rate": 210.0, "source": "tiktok_mock"},
+        {"keyword": "capybara",      "hashtags": ["#capybara"],       "views": 560_000_000,   "growth_rate": 95.0,  "source": "tiktok_mock"},
+        {"keyword": "griddy",        "hashtags": ["#griddy"],         "views": 290_000_000,   "growth_rate": 155.0, "source": "tiktok_mock"},
+        {"keyword": "pudgy penguin", "hashtags": ["#pudgypenguins"],  "views": 180_000_000,   "growth_rate": 230.0, "source": "tiktok_mock"},
     ]
