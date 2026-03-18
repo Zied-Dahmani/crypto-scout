@@ -13,13 +13,6 @@ jobs:
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
-      TWITTER_SCRAPER_USERNAME: ${{ secrets.TWITTER_SCRAPER_USERNAME }}
-      TWITTER_SCRAPER_PASSWORD: ${{ secrets.TWITTER_SCRAPER_PASSWORD }}
-      TWITTER_SCRAPER_EMAIL: ${{ secrets.TWITTER_SCRAPER_EMAIL }}
-      TIKTOK_USERNAME: ${{ secrets.TIKTOK_USERNAME }}
-      TIKTOK_PASSWORD: ${{ secrets.TIKTOK_PASSWORD }}
-      TIKTOK_SESSION: ${{ secrets.TIKTOK_SESSION }}
-      PROXY_URL: ${{ secrets.PROXY_URL }}
       COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
 
     steps:
@@ -32,9 +25,6 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r requirements.txt
-
-      - name: Install Playwright browser
-        run: playwright install chromium --with-deps
 
       - name: Run pipeline
         run: python main.py
