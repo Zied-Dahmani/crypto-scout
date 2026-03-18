@@ -18,6 +18,7 @@ jobs:
       TWITTER_SCRAPER_EMAIL: ${{ secrets.TWITTER_SCRAPER_EMAIL }}
       TIKTOK_USERNAME: ${{ secrets.TIKTOK_USERNAME }}
       TIKTOK_PASSWORD: ${{ secrets.TIKTOK_PASSWORD }}
+      TIKTOK_SESSION: ${{ secrets.TIKTOK_SESSION }}
       COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
 
     steps:

@@ -1,14 +1,20 @@
 """TikTok trend scraper — intercepts XHR calls via Playwright.
 
-First run (no saved session): launches a VISIBLE browser so you can log in manually.
-After login, session is saved to .tiktok_session/ and reused headlessly on all future runs.
+Session loading priority:
+  1. TIKTOK_SESSION env var (base64-encoded — used on GitHub Actions)
+  2. .tiktok_session/state.json (local file — used when running locally)
+  3. One-time visible-browser login (first local run only)
 
-Falls back to mock data on any failure so the pipeline always completes.
+When session expires → sends Discord alert and falls back to mock.
+Falls back to mock on any failure so the pipeline always completes.
 """
 
 import asyncio
+import base64
 import json
+import os
 import re
+import shutil
 from collections import defaultdict
 from pathlib import Path
 
@@ -20,13 +26,34 @@ logger = get_logger(__name__)
 _MIN_VIEWS = 500_000
 _SAMPLE_COUNT = 50
 _TOP_N = 10
-_SESSION_DIR = str(Path(__file__).parent.parent / ".tiktok_session")
+_SESSION_DIR = Path(__file__).parent.parent / ".tiktok_session"
+_SESSION_FILE = _SESSION_DIR / "state.json"
 
 
 # ── Session management ────────────────────────────────────────────────────────
 
+def _load_session_from_env() -> bool:
+    """Decode TIKTOK_SESSION env var and write to local session file."""
+    session_b64 = os.environ.get("TIKTOK_SESSION", "")
+    if not session_b64:
+        return False
+    try:
+        session_data = base64.b64decode(session_b64)
+        _SESSION_DIR.mkdir(parents=True, exist_ok=True)
+        _SESSION_FILE.write_bytes(session_data)
+        logger.info("tiktok: session loaded from TIKTOK_SESSION env var")
+        return True
+    except Exception as e:
+        logger.warning(f"tiktok: failed to decode TIKTOK_SESSION ({e})")
+        return False
+
+
 def _session_exists() -> bool:
-    return Path(_SESSION_DIR).exists() and any(Path(_SESSION_DIR).iterdir())
+    return _SESSION_FILE.exists() and _SESSION_FILE.stat().st_size > 0
+
+
+def _clear_session():
+    shutil.rmtree(_SESSION_DIR, ignore_errors=True)
 
 
 async def _setup_session() -> bool:
@@ -34,13 +61,14 @@ async def _setup_session() -> bool:
     from playwright.async_api import async_playwright
 
     logger.info("tiktok: no saved session — opening browser for one-time login")
-    print("\n" + "="*60)
-    print("TIKTOK SETUP — One-time login required")
-    print("="*60)
+    print("\n" + "=" * 60)
+    print("  TIKTOK SETUP — One-time login required")
+    print("=" * 60)
     print("A browser window will open.")
-    print("1. Log into TikTok (use 'Continue with Google')")
-    print("2. Once logged in and on the TikTok homepage, press ENTER here")
-    print("="*60 + "\n")
+    print("→ Click 'Log in' → 'Continue with Google'")
+    print("→ Sign in with: cryptoscout04 / cryptoscout09")
+    print("→ Once on the TikTok homepage, come back here")
+    print("=" * 60 + "\n")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
@@ -56,16 +84,14 @@ async def _setup_session() -> bool:
         page = await context.new_page()
         await page.goto("https://www.tiktok.com/login", wait_until="networkidle", timeout=30_000)
 
-        # Wait for user to complete login
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, input, "Press ENTER after you have logged in to TikTok... ")
+        await loop.run_in_executor(None, input, "Press ENTER after you are logged in... ")
 
-        # Save session state
-        Path(_SESSION_DIR).mkdir(parents=True, exist_ok=True)
-        await context.storage_state(path=f"{_SESSION_DIR}/state.json")
+        _SESSION_DIR.mkdir(parents=True, exist_ok=True)
+        await context.storage_state(path=str(_SESSION_FILE))
         await browser.close()
 
-    logger.info("tiktok: session saved to .tiktok_session/")
+    logger.info("tiktok: session saved")
     return True
 
 
@@ -75,11 +101,12 @@ async def _scrape_trending() -> list[dict]:
     """Visit TikTok trending/explore page and extract hashtag data from embedded JSON."""
     from playwright.async_api import async_playwright
 
-    # One-time setup if no session saved
+    # Priority: env var → local file → interactive setup
     if not _session_exists():
-        ok = await _setup_session()
-        if not ok:
-            return []
+        _load_session_from_env() or await _setup_session()
+
+    if not _session_exists():
+        return []
 
     logger.info("tiktok: launching Playwright with saved session")
 
@@ -88,10 +115,8 @@ async def _scrape_trending() -> list[dict]:
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-
-        # Load saved session
         context = await browser.new_context(
-            storage_state=f"{_SESSION_DIR}/state.json",
+            storage_state=str(_SESSION_FILE),
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -102,7 +127,6 @@ async def _scrape_trending() -> list[dict]:
         )
         page = await context.new_page()
 
-        # Intercept JSON API responses with video / hashtag data
         async def handle_response(response):
             url = response.url
             ct = response.headers.get("content-type", "")
@@ -131,13 +155,11 @@ async def _scrape_trending() -> list[dict]:
 
         page.on("response", handle_response)
 
-        urls_to_try = [
+        for url in [
             "https://www.tiktok.com/trending",
             "https://www.tiktok.com/explore",
             "https://www.tiktok.com/tag/trending",
-        ]
-
-        for url in urls_to_try:
+        ]:
             try:
                 await page.goto(url, wait_until="networkidle", timeout=35_000)
                 await page.wait_for_timeout(4_000)
@@ -148,13 +170,12 @@ async def _scrape_trending() -> list[dict]:
             except Exception as e:
                 logger.debug(f"tiktok: {url} load error ({e})")
 
-        # Also check if we got redirected to login (session expired)
-        current_url = page.url
-        if "login" in current_url:
-            logger.warning("tiktok: session expired — deleting saved session")
-            import shutil
-            shutil.rmtree(_SESSION_DIR, ignore_errors=True)
+        # Detect session expiry (redirected to login)
+        if "login" in page.url:
+            logger.warning("tiktok: session expired — clearing saved session")
+            _clear_session()
             await browser.close()
+            _notify_session_expired()
             return []
 
         # Fallback: extract from embedded page JSON
@@ -163,7 +184,6 @@ async def _scrape_trending() -> list[dict]:
                 html = await page.content()
                 for pattern in [
                     r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
-                    r'window\.__NEXT_DATA__\s*=\s*(\{.*?\});',
                     r'<script id="SIGI_STATE"[^>]*>(.*?)</script>',
                 ]:
                     m = re.search(pattern, html, re.DOTALL)
@@ -172,23 +192,22 @@ async def _scrape_trending() -> list[dict]:
                             data = json.loads(m.group(1))
                             _extract_deep(data, captured_videos)
                             if captured_videos:
-                                logger.info(f"tiktok: extracted {len(captured_videos)} items from page JSON")
                                 break
                         except Exception:
                             pass
             except Exception as e:
                 logger.debug(f"tiktok: page content extraction failed ({e})")
 
-        # Save refreshed session state
+        # Refresh saved session
         try:
-            await context.storage_state(path=f"{_SESSION_DIR}/state.json")
+            await context.storage_state(path=str(_SESSION_FILE))
         except Exception:
             pass
 
         await browser.close()
 
     if not captured_videos and not captured_hashtags:
-        logger.warning("tiktok: no data captured from any source")
+        logger.warning("tiktok: no data captured")
         return []
 
     if captured_videos:
@@ -201,7 +220,6 @@ async def _scrape_trending() -> list[dict]:
                 unique.append(item)
             elif not vid_id:
                 unique.append(item)
-        logger.info(f"tiktok: {len(unique)} unique videos captured")
         result = _parse_videos(unique[:_SAMPLE_COUNT])
         if result:
             return result
@@ -211,6 +229,32 @@ async def _scrape_trending() -> list[dict]:
 
     return []
 
+
+# ── Session expiry notification ───────────────────────────────────────────────
+
+def _notify_session_expired():
+    """Send a Discord alert when TikTok session expires."""
+    webhook_url = config.DISCORD_WEBHOOK_URL
+    if not webhook_url:
+        return
+    try:
+        import requests
+        requests.post(webhook_url, json={
+            "embeds": [{
+                "title": "⚠️ TikTok Session Expired",
+                "description": (
+                    "The TikTok session has expired. The bot is using **mock TikTok data** until refreshed.\n\n"
+                    "**To fix:** run `python setup_tiktok.py` locally, log in, and the session will be "
+                    "re-uploaded to GitHub automatically."
+                ),
+                "color": 0xFF6600,
+            }]
+        }, timeout=10)
+    except Exception:
+        pass
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _extract_deep(obj, out: list, depth: int = 0) -> None:
     if depth > 8 or len(out) >= _SAMPLE_COUNT:
@@ -250,7 +294,6 @@ def _parse_videos(videos: list[dict]) -> list[dict]:
     keyword_stats: dict[str, dict] = defaultdict(
         lambda: {"views": 0, "video_count": 0, "hashtags": set()}
     )
-
     for video in videos:
         stats = video.get("statistics") or video.get("stats") or {}
         views = (
@@ -259,20 +302,12 @@ def _parse_videos(videos: list[dict]) -> list[dict]:
             or stats.get("video_play_count")
             or 0
         )
-
-        desc = (
-            video.get("desc")
-            or (video.get("video") or {}).get("description", "")
-            or ""
-        )
-
+        desc = video.get("desc") or (video.get("video") or {}).get("description", "") or ""
         raw_tags = re.findall(r"#(\w+)", desc)
-
         for ch in video.get("challenges") or video.get("textExtra") or []:
             tag = ch.get("title") or ch.get("hashtagName") or ""
             if tag:
                 raw_tags.append(tag)
-
         for tag in raw_tags:
             kw = tag.lower()
             keyword_stats[kw]["views"] += views
@@ -285,16 +320,13 @@ def _parse_videos(videos: list[dict]) -> list[dict]:
             continue
         avg_views = stats["views"] / max(stats["video_count"], 1)
         growth_rate = round(min(avg_views / 1_000_000 * 100, 999.0), 1)
-        trends.append(
-            {
-                "keyword": kw,
-                "hashtags": sorted(stats["hashtags"])[:5],
-                "views": stats["views"],
-                "growth_rate": growth_rate,
-                "source": "tiktok",
-            }
-        )
-
+        trends.append({
+            "keyword": kw,
+            "hashtags": sorted(stats["hashtags"])[:5],
+            "views": stats["views"],
+            "growth_rate": growth_rate,
+            "source": "tiktok",
+        })
     trends.sort(key=lambda x: x["views"], reverse=True)
     return trends[:_TOP_N]
 
@@ -304,7 +336,6 @@ def _parse_videos(videos: list[dict]) -> list[dict]:
 def fetch_tiktok_trends() -> list[dict]:
     """Fetch trending topics from TikTok. Falls back to mock on any failure."""
     try:
-        logger.info("tiktok: starting Playwright scraper")
         trends = asyncio.run(_scrape_trending())
         if trends:
             logger.info(f"tiktok: scraped {len(trends)} trend signals")
@@ -320,14 +351,14 @@ def fetch_tiktok_trends() -> list[dict]:
 
 def _mock_trends() -> list[dict]:
     return [
-        {"keyword": "moo deng",      "hashtags": ["#moodeng", "#babyhippo", "#thailand"],  "views": 620_000_000,   "growth_rate": 345.0, "source": "tiktok_mock"},
-        {"keyword": "chill guy",     "hashtags": ["#chillguy", "#relatable", "#meme"],      "views": 980_000_000,   "growth_rate": 412.0, "source": "tiktok_mock"},
-        {"keyword": "skibidi",       "hashtags": ["#skibidi", "#genz", "#toilet"],           "views": 1_400_000_000, "growth_rate": 88.0,  "source": "tiktok_mock"},
-        {"keyword": "hawk tuah",     "hashtags": ["#hawktuah", "#viral", "#meme"],           "views": 780_000_000,   "growth_rate": 290.0, "source": "tiktok_mock"},
-        {"keyword": "trump",         "hashtags": ["#trump", "#politics", "#usa"],            "views": 2_100_000_000, "growth_rate": 520.0, "source": "tiktok_mock"},
-        {"keyword": "pepe",          "hashtags": ["#pepe", "#crypto", "#meme"],              "views": 450_000_000,   "growth_rate": 180.0, "source": "tiktok_mock"},
-        {"keyword": "dogwifhat",     "hashtags": ["#dogwifhat", "#wif", "#solana"],          "views": 320_000_000,   "growth_rate": 210.0, "source": "tiktok_mock"},
-        {"keyword": "capybara",      "hashtags": ["#capybara", "#animal", "#cute"],          "views": 560_000_000,   "growth_rate": 95.0,  "source": "tiktok_mock"},
-        {"keyword": "griddy",        "hashtags": ["#griddy", "#nfl", "#dance"],              "views": 290_000_000,   "growth_rate": 155.0, "source": "tiktok_mock"},
-        {"keyword": "pudgy penguin", "hashtags": ["#pudgypenguins", "#nft", "#pengu"],       "views": 180_000_000,   "growth_rate": 230.0, "source": "tiktok_mock"},
+        {"keyword": "moo deng",      "hashtags": ["#moodeng", "#babyhippo"],      "views": 620_000_000,   "growth_rate": 345.0, "source": "tiktok_mock"},
+        {"keyword": "chill guy",     "hashtags": ["#chillguy", "#meme"],           "views": 980_000_000,   "growth_rate": 412.0, "source": "tiktok_mock"},
+        {"keyword": "skibidi",       "hashtags": ["#skibidi", "#genz"],             "views": 1_400_000_000, "growth_rate": 88.0,  "source": "tiktok_mock"},
+        {"keyword": "hawk tuah",     "hashtags": ["#hawktuah", "#viral"],           "views": 780_000_000,   "growth_rate": 290.0, "source": "tiktok_mock"},
+        {"keyword": "trump",         "hashtags": ["#trump", "#politics"],           "views": 2_100_000_000, "growth_rate": 520.0, "source": "tiktok_mock"},
+        {"keyword": "pepe",          "hashtags": ["#pepe", "#crypto"],              "views": 450_000_000,   "growth_rate": 180.0, "source": "tiktok_mock"},
+        {"keyword": "dogwifhat",     "hashtags": ["#dogwifhat", "#solana"],         "views": 320_000_000,   "growth_rate": 210.0, "source": "tiktok_mock"},
+        {"keyword": "capybara",      "hashtags": ["#capybara", "#cute"],            "views": 560_000_000,   "growth_rate": 95.0,  "source": "tiktok_mock"},
+        {"keyword": "griddy",        "hashtags": ["#griddy", "#nfl"],               "views": 290_000_000,   "growth_rate": 155.0, "source": "tiktok_mock"},
+        {"keyword": "pudgy penguin", "hashtags": ["#pudgypenguins", "#pengu"],      "views": 180_000_000,   "growth_rate": 230.0, "source": "tiktok_mock"},
     ]
