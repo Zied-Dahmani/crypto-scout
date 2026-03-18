@@ -29,3 +29,9 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# TikTok saved session (contains cookies — never commit)
+.tiktok_session/
+
+# twscrape account database
+.twscrape_accounts.db

@@ -1,8 +1,7 @@
 """TikTok trend scraper — intercepts XHR calls via Playwright.
 
-Playwright visits tiktok.com/trending, intercepts the internal API response
-that carries trending video data, and parses hashtags + view counts from it.
-No TikTokApi library dependency — no 10201 / session errors.
+First run (no saved session): launches a VISIBLE browser so you can log in manually.
+After login, session is saved to .tiktok_session/ and reused headlessly on all future runs.
 
 Falls back to mock data on any failure so the pipeline always completes.
 """
@@ -11,7 +10,9 @@ import asyncio
 import json
 import re
 from collections import defaultdict
+from pathlib import Path
 
+import config
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -19,6 +20,53 @@ logger = get_logger(__name__)
 _MIN_VIEWS = 500_000
 _SAMPLE_COUNT = 50
 _TOP_N = 10
+_SESSION_DIR = str(Path(__file__).parent.parent / ".tiktok_session")
+
+
+# ── Session management ────────────────────────────────────────────────────────
+
+def _session_exists() -> bool:
+    return Path(_SESSION_DIR).exists() and any(Path(_SESSION_DIR).iterdir())
+
+
+async def _setup_session() -> bool:
+    """Open a visible browser for one-time manual TikTok login, then save session."""
+    from playwright.async_api import async_playwright
+
+    logger.info("tiktok: no saved session — opening browser for one-time login")
+    print("\n" + "="*60)
+    print("TIKTOK SETUP — One-time login required")
+    print("="*60)
+    print("A browser window will open.")
+    print("1. Log into TikTok (use 'Continue with Google')")
+    print("2. Once logged in and on the TikTok homepage, press ENTER here")
+    print("="*60 + "\n")
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=False)
+        context = await browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            locale="en-US",
+            viewport={"width": 1280, "height": 800},
+        )
+        page = await context.new_page()
+        await page.goto("https://www.tiktok.com/login", wait_until="networkidle", timeout=30_000)
+
+        # Wait for user to complete login
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, input, "Press ENTER after you have logged in to TikTok... ")
+
+        # Save session state
+        Path(_SESSION_DIR).mkdir(parents=True, exist_ok=True)
+        await context.storage_state(path=f"{_SESSION_DIR}/state.json")
+        await browser.close()
+
+    logger.info("tiktok: session saved to .tiktok_session/")
+    return True
 
 
 # ── Playwright scraper ────────────────────────────────────────────────────────
@@ -27,14 +75,23 @@ async def _scrape_trending() -> list[dict]:
     """Visit TikTok trending/explore page and extract hashtag data from embedded JSON."""
     from playwright.async_api import async_playwright
 
-    logger.info("tiktok: launching Playwright to scrape trending")
+    # One-time setup if no session saved
+    if not _session_exists():
+        ok = await _setup_session()
+        if not ok:
+            return []
+
+    logger.info("tiktok: launching Playwright with saved session")
 
     captured_videos: list[dict] = []
-    captured_hashtags: list[dict] = []  # trending hashtag objects from discover page
+    captured_hashtags: list[dict] = []
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
+
+        # Load saved session
         context = await browser.new_context(
+            storage_state=f"{_SESSION_DIR}/state.json",
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -59,13 +116,11 @@ async def _scrape_trending() -> list[dict]:
             try:
                 body = await response.body()
                 data = json.loads(body)
-                # Video lists
                 for key in ("aweme_list", "item_list"):
                     items = data.get(key) or []
                     if items:
                         logger.info(f"tiktok: intercepted {len(items)} videos from {url[:80]}")
                         captured_videos.extend(items)
-                # Hashtag / challenge lists
                 for key in ("challenge_list", "hashtag_list", "challenge_info_list"):
                     items = data.get(key) or []
                     if items:
@@ -93,7 +148,16 @@ async def _scrape_trending() -> list[dict]:
             except Exception as e:
                 logger.debug(f"tiktok: {url} load error ({e})")
 
-        # Also try to extract embedded __NEXT_DATA__ / SIGI_STATE JSON
+        # Also check if we got redirected to login (session expired)
+        current_url = page.url
+        if "login" in current_url:
+            logger.warning("tiktok: session expired — deleting saved session")
+            import shutil
+            shutil.rmtree(_SESSION_DIR, ignore_errors=True)
+            await browser.close()
+            return []
+
+        # Fallback: extract from embedded page JSON
         if not captured_videos and not captured_hashtags:
             try:
                 html = await page.content()
@@ -101,13 +165,11 @@ async def _scrape_trending() -> list[dict]:
                     r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
                     r'window\.__NEXT_DATA__\s*=\s*(\{.*?\});',
                     r'<script id="SIGI_STATE"[^>]*>(.*?)</script>',
-                    r'window\[[\'"__INITIAL_STATE__[\'\"]\]\s*=\s*(\{.*?\});',
                 ]:
                     m = re.search(pattern, html, re.DOTALL)
                     if m:
                         try:
                             data = json.loads(m.group(1))
-                            # Walk the JSON tree looking for video arrays
                             _extract_deep(data, captured_videos)
                             if captured_videos:
                                 logger.info(f"tiktok: extracted {len(captured_videos)} items from page JSON")
@@ -116,6 +178,12 @@ async def _scrape_trending() -> list[dict]:
                             pass
             except Exception as e:
                 logger.debug(f"tiktok: page content extraction failed ({e})")
+
+        # Save refreshed session state
+        try:
+            await context.storage_state(path=f"{_SESSION_DIR}/state.json")
+        except Exception:
+            pass
 
         await browser.close()
 
@@ -138,7 +206,6 @@ async def _scrape_trending() -> list[dict]:
         if result:
             return result
 
-    # Fallback: build trends from raw hashtag objects
     if captured_hashtags:
         return _parse_hashtag_objects(captured_hashtags)
 
@@ -146,7 +213,6 @@ async def _scrape_trending() -> list[dict]:
 
 
 def _extract_deep(obj, out: list, depth: int = 0) -> None:
-    """Recursively walk a JSON tree and collect objects that look like TikTok videos."""
     if depth > 8 or len(out) >= _SAMPLE_COUNT:
         return
     if isinstance(obj, list):
@@ -161,7 +227,6 @@ def _extract_deep(obj, out: list, depth: int = 0) -> None:
 
 
 def _parse_hashtag_objects(hashtags: list[dict]) -> list[dict]:
-    """Build trend signals from TikTok challenge/hashtag objects."""
     trends = []
     for h in hashtags:
         info = h.get("challenge_info") or h.get("hashtag_info") or h
@@ -182,13 +247,11 @@ def _parse_hashtag_objects(hashtags: list[dict]) -> list[dict]:
 
 
 def _parse_videos(videos: list[dict]) -> list[dict]:
-    """Extract hashtag trends from raw TikTok video objects."""
     keyword_stats: dict[str, dict] = defaultdict(
         lambda: {"views": 0, "video_count": 0, "hashtags": set()}
     )
 
     for video in videos:
-        # Support different response schemas
         stats = video.get("statistics") or video.get("stats") or {}
         views = (
             stats.get("play_count")
@@ -205,7 +268,6 @@ def _parse_videos(videos: list[dict]) -> list[dict]:
 
         raw_tags = re.findall(r"#(\w+)", desc)
 
-        # Also pull from challenges / textExtra arrays
         for ch in video.get("challenges") or video.get("textExtra") or []:
             tag = ch.get("title") or ch.get("hashtagName") or ""
             if tag:
