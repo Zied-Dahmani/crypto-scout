@@ -9,6 +9,7 @@ langchain-google-genai>=2.0.0
 # HTTP & TLS
 requests>=2.31.0
 certifi>=2024.0.0
+urllib3<2                 # pytrends compatibility
 
 # Trend sources
 pytrends>=4.9.2          # Google Trends (free, no key)
