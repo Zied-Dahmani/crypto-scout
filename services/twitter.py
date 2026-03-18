@@ -47,6 +47,8 @@ async def _ensure_scraper_ready(api) -> bool:
     try:
         proxy = config.PROXY_URL or None
         await api.pool.add_account(username, password, email, email, proxy=proxy)
+        if proxy:
+            logger.info(f"twitter: using proxy for login")
         await api.pool.login_all()
         _scraper_ready = True
         logger.info("twitter: scraper account logged in")

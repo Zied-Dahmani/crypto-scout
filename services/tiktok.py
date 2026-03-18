@@ -114,8 +114,17 @@ async def _scrape_trending() -> list[dict]:
     captured_hashtags: list[dict] = []
 
     is_ci = os.environ.get("CI") == "true"
-    proxy_url = config.PROXY_URL
-    proxy_config = {"server": proxy_url} if proxy_url else None
+    proxy_config = None
+    if config.PROXY_URL:
+        # Playwright needs server/username/password split
+        import urllib.parse
+        p_url = urllib.parse.urlparse(config.PROXY_URL)
+        proxy_config = {
+            "server": f"{p_url.scheme}://{p_url.hostname}:{p_url.port}",
+            "username": p_url.username,
+            "password": p_url.password,
+        }
+        logger.info(f"tiktok: using proxy {p_url.hostname}:{p_url.port}")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
@@ -133,6 +142,14 @@ async def _scrape_trending() -> list[dict]:
             viewport={"width": 1280, "height": 800},
         )
         page = await context.new_page()
+
+        # Stealth mode — hides headless browser signals from TikTok's JS
+        try:
+            from playwright_stealth import stealth_async
+            await stealth_async(page)
+            logger.info("tiktok: stealth mode enabled")
+        except ImportError:
+            pass
 
         async def handle_response(response):
             url = response.url
