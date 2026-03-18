@@ -1,242 +1,163 @@
 # Crypto Scout
 
-AI-powered system for discovering viral trends and matching them to low-cap cryptocurrencies.
+AI-powered bot that detects viral trends on TikTok and finds matching micro-cap tokens before the crowd.
 
-## What It Does
-
-Crypto Scout catches investment opportunities from **two angles**:
-
-1. **Mainstream Viral Trends** → Find related memecoins
-   - "Moo Deng" (baby hippo) trending → Find $MOODENG coin
-   - "Hawk Tuah" meme viral → Find $HAWKTUAH coin
-   - "Chill Guy" meme everywhere → Find $CHILLGUY coin
-
-2. **Crypto Twitter Mentions** → Track hyped coins directly
-   - "$PEPE is mooning!" → Direct signal
-   - "Everyone's buying $PENGU" → Direct signal
-
-**The alpha**: Catch mainstream trends BEFORE crypto Twitter notices them.
-
-## Architecture
+## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    CRYPTO SCOUT SUPERVISOR                   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-         ┌─────────────────────────────────────────────┐
-         │            TREND DISCOVERY                   │
-         │  ┌─────────────────┐ ┌───────────────────┐  │
-         │  │ General Trends  │ │ Crypto Mentions   │  │
-         │  │ (viral topics)  │ │ ($PENGU, $PEPE)   │  │
-         │  │                 │ │                   │  │
-         │  │ • Moo Deng      │ │ • $MOODENG hype   │  │
-         │  │ • Hawk Tuah     │ │ • $PEPE mentions  │  │
-         │  │ • Chill Guy     │ │ • $TRUMP trending │  │
-         │  │ • Trump news    │ │ • $WIF discussed  │  │
-         │  └─────────────────┘ └───────────────────┘  │
-         └──────────────────────┬──────────────────────┘
-                                │
-                                ▼
-                  ┌─────────────────────────┐
-                  │    CRYPTO ANALYSIS      │
-                  │  CoinGecko + LLM Match  │
-                  │                         │
-                  │  • Find matching coins  │
-                  │  • Score opportunities  │
-                  │  • Assess risk levels   │
-                  └────────────┬────────────┘
-                               │
-                               ▼
-                  ┌─────────────────────────┐
-                  │     NOTIFICATIONS       │
-                  │   WhatsApp (Twilio)     │
-                  └─────────────────────────┘
+TikTok trending  →  Validate (Google Trends + Twitter)  →  Find token on DEXScreener
+→  Analyze market data  →  Check smart-money wallets  →  Score & alert on Discord
 ```
 
-## Features
+**The edge**: catches a trend going viral on TikTok, finds the matching memecoin on-chain (market cap < $5M), and alerts you before it pumps.
 
-- **Dual Detection Strategy**: Both mainstream viral trends AND crypto Twitter mentions
-- **AI-Powered Matching**: LLM analyzes thematic connections (penguin trend → penguin coins)
-- **Real Crypto Data**: CoinGecko API for actual prices and market caps
-- **Low-Cap Focus**: Filters for coins under $1M market cap (maximum upside potential)
-- **WhatsApp Alerts**: Instant notifications via Twilio
-- **Mock Data Testing**: Test full flow without expensive API costs
+## Pipeline
+
+| Step | Node | What it does |
+|------|------|-------------|
+| 1 | `trend_detector` | Scrapes TikTok trending page via Playwright |
+| 2 | `trend_validator` | Cross-checks with Google Trends + Twitter mentions |
+| 3 | `token_finder` | Searches DEXScreener (newest first), falls back to CoinGecko |
+| 4 | `market_analyzer` | Fetches liquidity, volume, price from DEXScreener / CoinGecko |
+| 5 | `wallet_analyzer` | Checks early buyers on Etherscan (ETH) or Solscan (SOL) |
+| 6 | `scorer` | Composite score → BUY / WATCH / SKIP |
+
+**Scoring formula:**
+```
+score = 0.40 × trend_momentum + 0.35 × market_quality + 0.25 × smart_money
+```
+- `BUY`   ≥ 0.72
+- `WATCH` ≥ 0.52
+- `SKIP`  < 0.52
+
+**Filters applied:**
+- Market cap ceiling: **$5M** (drop established coins)
+- Pair age ceiling: **90 days** (drop old pairs)
+- Minimum liquidity: **$5K** (drop ghost pairs)
 
 ## Quick Start
 
-### 1. Install Dependencies
+### 1. Install
 
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r requirements.txt
+playwright install chromium
 ```
 
-### 2. Configure Environment
+### 2. Configure
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
-```bash
-# Required: LLM (choose one)
-GROQ_API_KEY=gsk_...        # Free & fast (recommended)
-# OPENAI_API_KEY=sk-...
-# ANTHROPIC_API_KEY=sk-ant-...
-# GOOGLE_API_KEY=...
-
-# Optional: WhatsApp notifications
-TWILIO_ACCOUNT_SID=AC...
-TWILIO_AUTH_TOKEN=...
-TWILIO_WHATSAPP_FROM=+14155238886
-TWILIO_WHATSAPP_TO=+1234567890
-```
+Fill in `.env` — see the table below for what's required vs optional.
 
 ### 3. Run
 
 ```bash
-# Full scan (trends + crypto + notifications)
-python main.py scan
+# Single scan
+python main.py
 
-# Continuous monitoring (every 5 min)
-python main.py continuous --interval 5
-
-# Interactive mode
-python main.py interactive
-
-# Trend discovery only
-python main.py trends
-
-# Crypto analysis only
-python main.py crypto
+# Scheduled — runs every 30 minutes and sends Discord alerts
+python main.py --schedule --interval 30
 ```
 
-## Example Output
+## API Keys
 
+| Key | Where to get | Required? |
+|-----|-------------|-----------|
+| `DISCORD_WEBHOOK_URL` | Discord → channel settings → Integrations → Webhooks | Yes (for alerts) |
+| `ETHERSCAN_API_KEY` | [etherscan.io](https://etherscan.io) → API Keys (free) | Recommended |
+| `TIKTOK_MS_TOKEN` | Browser DevTools → tiktok.com cookies → `msToken` | Recommended |
+| `COINGECKO_API_KEY` | [coingecko.com](https://coingecko.com) → API (free tier) | Optional |
+| `SOLSCAN_API_KEY` | [pro.solscan.io](https://pro.solscan.io) → API Key (free tier) | Optional |
+| `TWITTER_SCRAPER_USERNAME` | Any free Twitter account | Optional |
+| `TWITTER_SCRAPER_PASSWORD` | Same account | Optional |
+| `TWITTER_SCRAPER_EMAIL` | Same account | Optional |
+
+All missing keys fall back to mock data — the pipeline always completes.
+
+## TikTok Token Setup
+
+TikTok requires a session cookie (`msToken`) to serve trending data.
+
+1. Open your browser, go to [tiktok.com](https://tiktok.com) and log in
+2. Open DevTools (`F12`) → **Application** → **Cookies** → `https://www.tiktok.com`
+3. Copy the value of `msToken`
+4. Add to `.env`: `TIKTOK_MS_TOKEN=<value>`
+
+The scraper auto-refreshes the token on every run via Playwright.
+
+## Twitter Setup (Free)
+
+No paid API needed — uses `twscrape` which scrapes via a regular Twitter account.
+
+1. Create a throwaway Twitter account at [twitter.com](https://twitter.com)
+2. Add to `.env`:
 ```
-============================================================
-SCAN RESULTS
-============================================================
-
-📊 Found 10 general trends + 10 crypto mentions
-
-### Trends Discovered: 15
-• $MOODENG (96%)      ← Direct crypto mention
-• moo deng (92%)      ← Mainstream viral trend
-• $CHILLGUY (91%)     ← Direct crypto mention
-• chill guy (85%)     ← Mainstream viral trend
-• $TRUMP (94%)        ← Direct crypto mention
-
-### Recommendations: 5
-• Moo Deng (MOODENG) - Score: 96% - BUY
-• Chill Guy (CHILLGUY) - Score: 91% - BUY
-• Trump MAGA (TRUMP) - Score: 90% - CONSIDER
-• Pepe (PEPE) - Score: 85% - WATCH
-• Capybara (CAPY) - Score: 75% - WATCH
-
-### Notifications Sent: 3 via WhatsApp
+TWITTER_SCRAPER_USERNAME=your_username
+TWITTER_SCRAPER_PASSWORD=your_password
+TWITTER_SCRAPER_EMAIL=your_email@gmail.com
 ```
-
-## How The Dual Strategy Works
-
-### Approach 1: Mainstream Trends → Find Coins
-
-```
-VIRAL TOPIC                    MATCHING CRYPTO
-─────────────────────────────────────────────
-"Moo Deng" baby hippo    →    $MOODENG token
-"Hawk Tuah" meme girl    →    $HAWKTUAH coin
-"Chill Guy" cartoon      →    $CHILLGUY token
-"Capybara" cute animal   →    $CAPY coin
-Trump in the news        →    $TRUMP memecoins
-```
-
-**Why this works**: When something goes viral in mainstream culture, degens create memecoins. If you catch the trend early, you can find the coin before everyone else.
-
-### Approach 2: Crypto Mentions → Direct Signal
-
-```
-TWITTER CRYPTO DISCUSSION      SIGNAL
-─────────────────────────────────────────────
-"$PEPE is pumping!"       →    High mention volume
-"Aping into $MOODENG"     →    Bullish sentiment
-"$WIF community strong"   →    Community activity
-```
-
-**Why this works**: When crypto Twitter is actively discussing a coin with bullish sentiment, that's a direct signal of interest.
-
-## WhatsApp Setup (Optional)
-
-1. Create account at [twilio.com](https://www.twilio.com)
-2. Go to **Messaging** → **Try it out** → **WhatsApp Sandbox**
-3. Follow instructions to join the sandbox (send a WhatsApp message)
-4. Copy your credentials to `.env`:
-   - Account SID
-   - Auth Token
-   - Your phone number
 
 ## Project Structure
 
 ```
 crypto-scout/
-├── agents/                 # LangGraph AI agents
-│   ├── tools/              # Agent tools
-│   │   ├── trend_tools.py  # Trend discovery tools
-│   │   └── crypto_tools.py # Crypto analysis tools
-│   ├── llm.py              # LLM configuration (Groq/OpenAI/Anthropic)
-│   ├── trend_agent.py      # Trend discovery agent
-│   ├── crypto_agent.py     # Crypto analysis agent
-│   └── supervisor.py       # Multi-agent orchestrator
-├── services/
-│   ├── trend_sources/
-│   │   └── twitter.py      # Twitter mock data (both approaches)
-│   ├── crypto_sources/
-│   │   └── coingecko.py    # CoinGecko API (real data)
-│   ├── notifications/
-│   │   └── whatsapp.py     # WhatsApp via Twilio
-│   └── matching.py         # Trend-crypto matching logic
-├── models/                 # Pydantic data models
-├── config/                 # Configuration
-└── main.py                 # Entry point
+├── main.py                        # Entry point (--schedule --interval flags)
+├── config.py                      # All env-var config + thresholds
+├── pipeline/
+│   ├── graph.py                   # LangGraph StateGraph wiring
+│   ├── state.py                   # TypedDicts for pipeline state
+│   └── nodes/
+│       ├── trend_detector.py      # Node 1: TikTok trends
+│       ├── trend_validator.py     # Node 2: Google Trends + Twitter
+│       ├── token_finder.py        # Node 3: DEXScreener + CoinGecko
+│       ├── market_analyzer.py     # Node 4: market data
+│       ├── wallet_analyzer.py     # Node 5: on-chain wallets
+│       └── scorer.py              # Node 6: scoring + verdict
+└── services/
+    ├── tiktok.py                  # Playwright scraper + mock fallback
+    ├── google_trends.py           # pytrends wrapper
+    ├── twitter.py                 # twscrape wrapper + mock fallback
+    ├── dexscreener.py             # Free DEX API
+    ├── coingecko.py               # CoinGecko API
+    ├── etherscan.py               # Ethereum on-chain data
+    ├── solscan.py                 # Solana on-chain data
+    └── discord.py                 # Webhook alerts
 ```
 
-## Data Sources
+## Example Output
 
-| Component | Source | Status |
-|-----------|--------|--------|
-| General Trends | Twitter | Mock data (realistic) |
-| Crypto Mentions | Twitter | Mock data (realistic) |
-| Crypto Prices | CoinGecko | Real API |
-| Analysis | Groq/OpenAI LLM | Real API |
-| Notifications | Twilio WhatsApp | Real API |
+```
+==============================================================
+  CRYPTO OPPORTUNITY DETECTION — RESULTS
+==============================================================
+  Trends detected  : 10
+  Trends validated : 4
+  Tokens found     : 12
+  Opportunities    : 3
 
-**Why mock Twitter?** Twitter API costs $100+/month. Mock data lets you test the full system for free while still being realistic.
+  #1 🟢 [BUY]   NEWMEME — New Meme Token
+      Trend      : newmeme
+      Score      : 0.741  (trend=0.93, market=0.68, smart=0.52)
+      Market cap : $     284,000
+      Volume 24h : $     198,000
+      Price      : $0.00000284
 
-## Extending
-
-### Add Real Twitter Data
-Replace mock data in `services/trend_sources/twitter.py` with real Twitter API calls.
-
-### Add More Trend Sources
-- Google Trends
-- Reddit (r/cryptocurrency, r/memecoins)
-- TikTok viral sounds
-- Discord server activity
-
-### Add More Notification Channels
-- Telegram bot
-- Discord webhook
-- Email alerts
+  #2 🟡 [WATCH] SKBDI — Skibidi Toilet
+      Score      : 0.525  (trend=0.45, market=0.75, smart=0.32)
+      Market cap : $     366,932
+```
 
 ## Risk Warning
 
 This software is for educational and research purposes only.
 
-- Cryptocurrency investments are **extremely speculative**
-- Low-cap memecoins can lose **100% of value** in minutes
+- Memecoins are **extremely speculative** — most go to zero
+- Low-cap tokens can lose 100% of value in minutes
 - **Never invest more than you can afford to lose**
 - Always do your own research (DYOR)
 - This is **NOT financial advice**
