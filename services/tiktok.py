@@ -113,8 +113,15 @@ async def _scrape_trending() -> list[dict]:
     captured_videos: list[dict] = []
     captured_hashtags: list[dict] = []
 
+    is_ci = os.environ.get("CI") == "true"
+    proxy_url = config.PROXY_URL
+    proxy_config = {"server": proxy_url} if proxy_url else None
+
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            proxy=proxy_config,
+        )
         context = await browser.new_context(
             storage_state=str(_SESSION_FILE),
             user_agent=(

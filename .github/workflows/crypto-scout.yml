@@ -19,6 +19,7 @@ jobs:
       TIKTOK_USERNAME: ${{ secrets.TIKTOK_USERNAME }}
       TIKTOK_PASSWORD: ${{ secrets.TIKTOK_PASSWORD }}
       TIKTOK_SESSION: ${{ secrets.TIKTOK_SESSION }}
+      PROXY_URL: ${{ secrets.PROXY_URL }}
       COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
 
     steps:

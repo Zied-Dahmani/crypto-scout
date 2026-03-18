@@ -34,6 +34,9 @@ TIKTOK_MS_TOKEN: str = os.getenv("TIKTOK_MS_TOKEN", "")
 TIKTOK_USERNAME: str = os.getenv("TIKTOK_USERNAME", "")
 TIKTOK_PASSWORD: str = os.getenv("TIKTOK_PASSWORD", "")
 
+# --- Residential proxy (Webshare) ---
+PROXY_URL: str = os.getenv("PROXY_URL", "")
+
 # --- Discord webhook ---
 DISCORD_WEBHOOK_URL: str = os.getenv("DISCORD_WEBHOOK_URL", "")
 
