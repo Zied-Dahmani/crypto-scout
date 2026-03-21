@@ -18,13 +18,14 @@ logger = get_logger(__name__)
 
 _FEED_URLS = [
     "https://trends.google.com/trending/rss?geo=US",
+    "https://trends.google.com/trending/rss?geo=CA",
     "https://trends.google.com/trending/rss?geo=GB",
     "https://trends.google.com/trending/rss?geo=FR",
     "https://trends.google.com/trending/rss?geo=DE",
     "https://trends.google.com/trending/rss?geo=JP",
     "https://trends.google.com/trending/rss?geo=KR",
-    "https://trends.google.com/trending/rss?geo=BR",
-    "https://trends.google.com/trending/rss?geo=IN",
+    "https://trends.google.com/trending/rss?geo=AU",
+    "https://trends.google.com/trending/rss?geo=CN",
 ]
 _HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; crypto-scout/1.0)"}
 _TOP_N = 20
