@@ -7,6 +7,7 @@ before it hits mainstream crypto coverage.
 Falls back to mock keywords if the feed is unavailable.
 """
 
+import re
 import xml.etree.ElementTree as ET
 
 import requests
@@ -18,21 +19,61 @@ logger = get_logger(__name__)
 _FEED_URLS = [
     "https://trends.google.com/trending/rss?geo=US",
     "https://trends.google.com/trending/rss?geo=GB",
+    "https://trends.google.com/trending/rss?geo=FR",
+    "https://trends.google.com/trending/rss?geo=DE",
+    "https://trends.google.com/trending/rss?geo=JP",
+    "https://trends.google.com/trending/rss?geo=KR",
+    "https://trends.google.com/trending/rss?geo=BR",
+    "https://trends.google.com/trending/rss?geo=IN",
 ]
 _HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; crypto-scout/1.0)"}
-_TOP_N = 15
+_TOP_N = 20
+
+# Keywords matching these patterns are sports fixtures — skip them
+_SPORTS_PATTERNS = [
+    # Match formats
+    r"\bvs\b", r"\bvs\.\b", r" – ", r" - ", r" x ", r" \d+[-:]\d+",
+    r"\bmma\b", r"\bmotogp\b", r"\bformula\b", r"\bf1\b", r"\bnascar\b",
+    # Club suffixes
+    r"\bfc\b", r"\bsc\b", r"\bac\b", r"\butd\b", r"\bunited\b",
+    r"\bcity\b", r"\btown\b", r"\brovers\b", r"\bwanderers\b",
+    r"\bhotspur\b", r"\balbion\b", r"\broyal\b",
+    # Club names
+    r"\bpsg\b", r"\bbayern\b", r"\bdortmund\b", r"\bjuventus\b",
+    r"\binter\b", r"\bbarcelona\b", r"\bmadrid\b", r"\barsenal\b",
+    r"\bchelsea\b", r"\bliverpool\b", r"\bmanchester\b", r"\bwrexham\b",
+    r"\bwerder\b", r"\bwolfsburg\b", r"\bfalkir\b",
+    # Leagues / competitions
+    r"\bnhl\b", r"\bnfl\b", r"\bnba\b", r"\bmlb\b", r"\bnfl\b",
+    r"\bpremier league\b", r"\blaliga\b", r"\bbundesliga\b",
+    r"\bserie a\b", r"\bligue 1\b", r"\bchampions league\b",
+    r"\bworld cup\b", r"\bfa cup\b", r"\beuropa\b", r"\bimsa\b",
+    r"\bopta\b",
+]
+
+
+def _is_non_latin(keyword: str) -> bool:
+    """Skip keywords in Arabic, Japanese, Korean etc. — DEXScreener won't match."""
+    non_latin = sum(1 for c in keyword if ord(c) > 0x024F)
+    return non_latin > len(keyword) * 0.2
+
+
+def _is_sports(keyword: str) -> bool:
+    kw = keyword.lower()
+    return any(re.search(p, kw) for p in _SPORTS_PATTERNS)
 
 
 def _fetch_rss(url: str) -> list[str]:
     resp = requests.get(url, headers=_HEADERS, timeout=10)
     resp.raise_for_status()
     root = ET.fromstring(resp.content)
-    ns = {"ht": "https://trends.google.com/trending/rss"}
     keywords = []
     for item in root.findall(".//item"):
         title = item.findtext("title", "").strip().lower()
-        if title:
+        if title and not _is_sports(title) and not _is_non_latin(title):
             keywords.append(title)
+        elif title:
+            logger.debug(f"trends: skipping '{title}'")
     return keywords
 
 
