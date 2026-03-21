@@ -2,7 +2,7 @@ name: Crypto Scout
 
 on:
   schedule:
-    - cron: '0 * * * *'   # every hour
+    - cron: '0 */6 * * *'   # every 6 hours
   workflow_dispatch:        # manual trigger from GitHub UI
 
 jobs:
@@ -14,6 +14,7 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
       COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+      APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4

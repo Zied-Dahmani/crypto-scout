@@ -1,19 +1,67 @@
-"""Trend keyword source — mock data.
+"""Trend keyword source — Google Trends RSS feed (real-time, free, no auth).
 
-Returns a fixed list of viral keywords used as pipeline seeds.
-Each keyword is validated against real Google Trends data in the next node,
-so dead trends are automatically filtered out.
+Fetches what's actually trending right now on Google (people, memes, events, news).
+These are the early signals — someone launches a memecoin for a viral topic
+before it hits mainstream crypto coverage.
 
-To upgrade to real TikTok data in the future, see README — TikTok Session.
+Falls back to mock keywords if the feed is unavailable.
 """
+
+import xml.etree.ElementTree as ET
+
+import requests
 
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+_FEED_URLS = [
+    "https://trends.google.com/trending/rss?geo=US",
+    "https://trends.google.com/trending/rss?geo=GB",
+]
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; crypto-scout/1.0)"}
+_TOP_N = 15
+
+
+def _fetch_rss(url: str) -> list[str]:
+    resp = requests.get(url, headers=_HEADERS, timeout=10)
+    resp.raise_for_status()
+    root = ET.fromstring(resp.content)
+    ns = {"ht": "https://trends.google.com/trending/rss"}
+    keywords = []
+    for item in root.findall(".//item"):
+        title = item.findtext("title", "").strip().lower()
+        if title:
+            keywords.append(title)
+    return keywords
+
 
 def fetch_tiktok_trends() -> list[dict]:
-    logger.info("trends: using mock keyword seeds (validated by Google Trends)")
+    seen: set[str] = set()
+    trends = []
+
+    for url in _FEED_URLS:
+        try:
+            keywords = _fetch_rss(url)
+            for kw in keywords:
+                if kw not in seen:
+                    seen.add(kw)
+                    trends.append({
+                        "keyword": kw,
+                        "hashtags": [f"#{kw.replace(' ', '')}"],
+                        "views": 5_000_000,
+                        "growth_rate": 100.0,
+                        "source": "google_trends_rss",
+                    })
+        except Exception as e:
+            logger.warning(f"trends: RSS feed failed for {url} ({e})")
+
+    if trends:
+        result = trends[:_TOP_N]
+        logger.info(f"trends: {len(result)} real-time trending topics from Google RSS")
+        return result
+
+    logger.info("trends: using mock keyword seeds (Google RSS unavailable)")
     return [
         {"keyword": "moo deng",      "hashtags": ["#moodeng"],      "views": 620_000_000,   "growth_rate": 345.0, "source": "mock"},
         {"keyword": "chill guy",     "hashtags": ["#chillguy"],      "views": 980_000_000,   "growth_rate": 412.0, "source": "mock"},
