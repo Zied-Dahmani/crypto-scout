@@ -19,7 +19,7 @@ Google Trends RSS (what's viral now)
 
 | Step | Node | Data source | Status |
 |------|------|-------------|--------|
-| 1 | `trend_detector` | Google Trends RSS (US + UK) | **Real** |
+| 1 | `trend_detector` | Google Trends RSS (US, CA, GB, FR, DE, JP, KR, AU, CN) | **Real** |
 | 2 | `trend_validator` | Google Trends interest + Apify TikTok viral count | **Real** |
 | 3 | `token_finder` | DEXScreener + CoinGecko | **Real** |
 | 4 | `market_analyzer` | DEXScreener + CoinGecko | **Real** |
@@ -39,7 +39,9 @@ score = 0.40 × trend_momentum + 0.35 × market_quality + 0.25 × smart_money
 - Pair age ≤ 90 days
 - Liquidity ≥ $5K
 
-**Expected alerts per run:** 0–3 cards. Quiet days (sports trending) = 0–1. Viral meme days = 2–5.
+**Expected alerts per run:** 0–3 cards. Quiet days = 0–1. Viral meme/person days = 2–5.
+
+**Sports filtering:** Routine fixtures (e.g. "Watford vs Leicester") are automatically filtered. Extraordinary sports moments with 500k+ searches (Super Bowl, Champions League final upset) are kept — they spawn coins too.
 
 ## Deployment (GitHub Actions — free)
 
