@@ -14,6 +14,7 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
       COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+      APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4

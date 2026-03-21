@@ -23,6 +23,9 @@ ETHERSCAN_API_KEY: str = os.getenv("ETHERSCAN_API_KEY", "")
 # --- Solscan (Solana on-chain data) ---
 SOLSCAN_API_KEY: str = os.getenv("SOLSCAN_API_KEY", "")
 
+# --- Apify (TikTok trending) ---
+APIFY_API_KEY: str = os.getenv("APIFY_API_KEY", "")
+
 # --- Discord webhook ---
 DISCORD_WEBHOOK_URL: str = os.getenv("DISCORD_WEBHOOK_URL", "")
 
