@@ -1,28 +1,30 @@
 # Crypto Scout
 
-Bot that detects viral trends and finds matching micro-cap tokens before they pump. Runs every hour and sends alerts to Discord.
+Bot that detects what's going viral right now, finds the matching micro-cap memecoin on-chain, and alerts you on Discord before it pumps. Runs every 6 hours automatically via GitHub Actions.
 
 ## How It Works
 
 ```
-Mock keywords → Validate (Google Trends) → Find token (DEXScreener + CoinGecko)
-→ Analyze market → Check smart-money wallets → Score → Alert on Discord
+Google Trends RSS (what's viral now)
+  → Validate: Google Trends + TikTok viral videos (Apify)
+  → Find token: DEXScreener (newest first) + CoinGecko fallback
+  → Analyze: live price, volume, liquidity, market cap
+  → Check wallets: smart-money early buyers (Etherscan / Solscan)
+  → Score → Discord alert
 ```
 
-**The edge**: takes a list of viral keywords, validates which ones are actually trending on Google right now, finds the matching memecoin on-chain (market cap < $5M), and alerts you before it pumps.
+**The edge:** a person/meme/animal goes viral on Google → someone launches a memecoin → bot finds it at $50k–$5M market cap before the crowd.
 
 ## Pipeline
 
 | Step | Node | Data source | Status |
 |------|------|-------------|--------|
-| 1 | `trend_detector` | Mock keyword seeds | Mock |
-| 2 | `trend_validator` | Google Trends (pytrends) | **Real** |
+| 1 | `trend_detector` | Google Trends RSS (US + UK) | **Real** |
+| 2 | `trend_validator` | Google Trends interest + Apify TikTok viral count | **Real** |
 | 3 | `token_finder` | DEXScreener + CoinGecko | **Real** |
 | 4 | `market_analyzer` | DEXScreener + CoinGecko | **Real** |
 | 5 | `wallet_analyzer` | Etherscan (ETH) + Solscan (SOL) | **Real** |
 | 6 | `scorer` | Composite score → BUY / WATCH / SKIP | — |
-
-> **Note on mock sources**: Trend keywords (step 1) and social mention counts (step 2 Twitter weight) use mock data because TikTok and Twitter block automated scraping from all server/proxy IPs. The pipeline is still effective because Google Trends validation (step 2) filters out dead trends using real data.
 
 **Scoring formula:**
 ```
@@ -37,24 +39,28 @@ score = 0.40 × trend_momentum + 0.35 × market_quality + 0.25 × smart_money
 - Pair age ≤ 90 days
 - Liquidity ≥ $5K
 
+**Expected alerts per run:** 0–3 cards. Quiet days (sports trending) = 0–1. Viral meme days = 2–5.
+
 ## Deployment (GitHub Actions — free)
 
-The bot runs automatically every hour via GitHub Actions. No server needed.
+Runs automatically every 6 hours. No server needed.
 
 ### Setup
 
 1. Fork/clone this repo
 2. Go to **Settings → Secrets and variables → Actions** and add:
 
-| Secret | Value |
-|--------|-------|
-| `DISCORD_WEBHOOK_URL` | Your Discord webhook URL |
-| `ETHERSCAN_API_KEY` | From etherscan.io (free) |
-| `GROQ_API_KEY` | From console.groq.com (free) |
+| Secret | Where to get | Required |
+|--------|-------------|---------|
+| `DISCORD_WEBHOOK_URL` | Discord → channel settings → Integrations → Webhooks | Yes |
+| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) (free) | Yes |
+| `ETHERSCAN_API_KEY` | [etherscan.io](https://etherscan.io/apis) (free) | Recommended |
+| `APIFY_API_KEY` | [apify.com](https://apify.com) → Settings → Integrations (free tier) | Recommended |
+| `COINGECKO_API_KEY` | [coingecko.com](https://coingecko.com/en/api) (free tier) | Optional |
 
 3. Go to **Actions → Crypto Scout → Run workflow** to trigger manually
 
-That's it. Alerts arrive in Discord every hour.
+Alerts arrive in Discord at 00:00, 06:00, 12:00, 18:00 UTC.
 
 ## Run Locally
 
@@ -62,8 +68,8 @@ That's it. Alerts arrive in Discord every hour.
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # fill in your keys
-python main.py         # single run
-python main.py --schedule --interval 60  # every 60 min
+python main.py                        # single run
+python main.py --schedule --interval 360  # every 6 hours
 ```
 
 ## Project Structure
@@ -76,39 +82,26 @@ crypto-scout/
 │   ├── graph.py                   # LangGraph StateGraph wiring
 │   ├── state.py                   # TypedDicts for pipeline state
 │   └── nodes/
-│       ├── trend_detector.py      # Node 1: keyword seeds
-│       ├── trend_validator.py     # Node 2: Google Trends validation
+│       ├── trend_detector.py      # Node 1: Google Trends RSS
+│       ├── trend_validator.py     # Node 2: Google Trends + TikTok viral
 │       ├── token_finder.py        # Node 3: DEXScreener + CoinGecko
 │       ├── market_analyzer.py     # Node 4: market data
 │       ├── wallet_analyzer.py     # Node 5: on-chain wallets
 │       └── scorer.py              # Node 6: scoring + verdict
 └── services/
-    ├── tiktok.py                  # Trend keyword seeds (mock)
-    ├── google_trends.py           # Google Trends validation (real)
-    ├── twitter.py                 # Social mention counts (mock)
-    ├── dexscreener.py             # DEX pair data (real)
-    ├── coingecko.py               # Market data (real)
-    ├── etherscan.py               # Ethereum wallet analysis (real)
-    ├── solscan.py                 # Solana wallet analysis (real)
+    ├── tiktok.py                  # Google Trends RSS (trend discovery)
+    ├── twitter.py                 # Apify TikTok viral count (social signal)
+    ├── google_trends.py           # Google Trends interest validation
+    ├── dexscreener.py             # DEX pair data
+    ├── coingecko.py               # Market data
+    ├── etherscan.py               # Ethereum wallet analysis
+    ├── solscan.py                 # Solana wallet analysis
     └── discord.py                 # Webhook alerts
 ```
 
-## Updating Trend Keywords (TikTok)
+## Updating Trend Keywords Manually
 
-The keyword seeds in `services/tiktok.py` are the trends the bot searches for. Update them manually whenever you want the bot to track new viral topics.
-
-Open [services/tiktok.py](services/tiktok.py) and edit the list:
-
-```python
-{"keyword": "your new trend", "hashtags": ["#yourtrend"], "views": 500_000_000, "growth_rate": 300.0, "source": "mock"},
-```
-
-Then push to `dev`. The bot will start tracking that keyword on the next run.
-
-**Where to find trending topics:**
-- [TikTok Trending](https://www.tiktok.com/trending) — browse manually
-- [Google Trends](https://trends.google.com/trending) — top trending searches
-- Crypto Twitter / Discord — what's being talked about
+If the bot misses a viral trend you spotted, edit `services/tiktok.py` mock list and push to `dev`. The mock list is the fallback used when Google Trends RSS is unavailable.
 
 ## Risk Warning
 
