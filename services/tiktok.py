@@ -1,95 +1,67 @@
-"""Trend keyword source — Apify TikTok scraper with mock fallback.
+"""Trend keyword source — Google Trends RSS feed (real-time, free, no auth).
 
-Real data: Apify runs clockworks/tiktok-scraper on their infrastructure,
-returning actual trending hashtags with view counts. No IP blocks, no auth issues.
+Fetches what's actually trending right now on Google (people, memes, events, news).
+These are the early signals — someone launches a memecoin for a viral topic
+before it hits mainstream crypto coverage.
 
-Fallback: fixed mock keywords when APIFY_API_KEY is not set.
-
-To enable real data:
-  1. Sign up at apify.com (free tier — $5/month credit)
-  2. Go to Settings → Integrations → copy your API token
-  3. Add APIFY_API_KEY=<token> to .env and GitHub secrets
+Falls back to mock keywords if the feed is unavailable.
 """
 
-import config
+import xml.etree.ElementTree as ET
+
+import requests
+
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_ACTOR_ID = "clockworks~tiktok-scraper"
-_MIN_VIEWS = 500_000
-_TOP_N = 10
+_FEED_URLS = [
+    "https://trends.google.com/trending/rss?geo=US",
+    "https://trends.google.com/trending/rss?geo=GB",
+]
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; crypto-scout/1.0)"}
+_TOP_N = 15
 
 
-def _fetch_from_apify() -> list[dict]:
-    import requests
-
-    logger.info("tiktok: fetching trending from Apify")
-
-    run_input = {
-        "searchSection": "/trending",
-        "maxItems": 50,
-        "shouldDownloadVideos": False,
-        "shouldDownloadCovers": False,
-        "shouldDownloadSubtitles": False,
-    }
-
-    resp = requests.post(
-        f"https://api.apify.com/v2/acts/{_ACTOR_ID}/run-sync-get-dataset-items",
-        params={"token": config.APIFY_API_KEY, "timeout": 120, "memory": 512},
-        json=run_input,
-        timeout=150,
-    )
+def _fetch_rss(url: str) -> list[str]:
+    resp = requests.get(url, headers=_HEADERS, timeout=10)
     resp.raise_for_status()
-    items = resp.json()
-
-    if not items:
-        logger.warning("tiktok: Apify returned 0 items")
-        return []
-
-    from collections import defaultdict
-    import re
-
-    keyword_stats: dict = defaultdict(lambda: {"views": 0, "video_count": 0})
-
-    for item in items:
-        views = item.get("playCount") or item.get("stats", {}).get("playCount") or 0
-        text = item.get("text") or item.get("desc") or ""
-        tags = re.findall(r"#(\w+)", text)
-        for tag in tags:
-            kw = tag.lower()
-            keyword_stats[kw]["views"] += views
-            keyword_stats[kw]["video_count"] += 1
-
-    trends = []
-    for kw, stats in keyword_stats.items():
-        if stats["views"] < _MIN_VIEWS:
-            continue
-        avg_views = stats["views"] / max(stats["video_count"], 1)
-        trends.append({
-            "keyword": kw,
-            "hashtags": [f"#{kw}"],
-            "views": stats["views"],
-            "growth_rate": round(min(avg_views / 1_000_000 * 100, 999.0), 1),
-            "source": "tiktok",
-        })
-
-    trends.sort(key=lambda x: x["views"], reverse=True)
-    result = trends[:_TOP_N]
-    logger.info(f"tiktok: {len(result)} trending keywords from Apify")
-    return result
+    root = ET.fromstring(resp.content)
+    ns = {"ht": "https://trends.google.com/trending/rss"}
+    keywords = []
+    for item in root.findall(".//item"):
+        title = item.findtext("title", "").strip().lower()
+        if title:
+            keywords.append(title)
+    return keywords
 
 
 def fetch_tiktok_trends() -> list[dict]:
-    if config.APIFY_API_KEY:
-        try:
-            trends = _fetch_from_apify()
-            if trends:
-                return trends
-        except Exception as e:
-            logger.warning(f"tiktok: Apify failed ({e}), falling back to mock")
+    seen: set[str] = set()
+    trends = []
 
-    logger.info("tiktok: using mock keyword seeds (set APIFY_API_KEY for real data)")
+    for url in _FEED_URLS:
+        try:
+            keywords = _fetch_rss(url)
+            for kw in keywords:
+                if kw not in seen:
+                    seen.add(kw)
+                    trends.append({
+                        "keyword": kw,
+                        "hashtags": [f"#{kw.replace(' ', '')}"],
+                        "views": 5_000_000,
+                        "growth_rate": 100.0,
+                        "source": "google_trends_rss",
+                    })
+        except Exception as e:
+            logger.warning(f"trends: RSS feed failed for {url} ({e})")
+
+    if trends:
+        result = trends[:_TOP_N]
+        logger.info(f"trends: {len(result)} real-time trending topics from Google RSS")
+        return result
+
+    logger.info("trends: using mock keyword seeds (Google RSS unavailable)")
     return [
         {"keyword": "moo deng",      "hashtags": ["#moodeng"],      "views": 620_000_000,   "growth_rate": 345.0, "source": "mock"},
         {"keyword": "chill guy",     "hashtags": ["#chillguy"],      "views": 980_000_000,   "growth_rate": 412.0, "source": "mock"},
