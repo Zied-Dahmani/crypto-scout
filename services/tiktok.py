@@ -63,17 +63,34 @@ def _is_sports(keyword: str) -> bool:
     return any(re.search(p, kw) for p in _SPORTS_PATTERNS)
 
 
+def _parse_traffic(traffic_str: str) -> int:
+    """Parse '500K+' or '1M+' into an integer."""
+    s = traffic_str.replace("+", "").replace(",", "").strip().upper()
+    if s.endswith("M"):
+        return int(float(s[:-1]) * 1_000_000)
+    if s.endswith("K"):
+        return int(float(s[:-1]) * 1_000)
+    return int(s) if s.isdigit() else 0
+
+
 def _fetch_rss(url: str) -> list[str]:
     resp = requests.get(url, headers=_HEADERS, timeout=10)
     resp.raise_for_status()
     root = ET.fromstring(resp.content)
+    ns = {"ht": "https://trends.google.com/trending/rss"}
     keywords = []
     for item in root.findall(".//item"):
         title = item.findtext("title", "").strip().lower()
-        if title and not _is_sports(title) and not _is_non_latin(title):
-            keywords.append(title)
-        elif title:
-            logger.debug(f"trends: skipping '{title}'")
+        if not title or _is_non_latin(title):
+            continue
+        traffic_raw = item.findtext("ht:approx_traffic", "0", ns)
+        traffic = _parse_traffic(traffic_raw)
+        is_sports = _is_sports(title)
+        # Keep sports only if extraordinary traffic (500k+) — Super Bowl level
+        if is_sports and traffic < 500_000:
+            logger.debug(f"trends: skipping routine fixture '{title}' ({traffic_raw})")
+            continue
+        keywords.append(title)
     return keywords
 
 
