@@ -6,7 +6,7 @@ Keeps only trends with increasing momentum above the configured threshold.
 import config
 from pipeline.state import PipelineState, ValidatedTrend
 from services.google_trends import get_trend_score
-from services.twitter import get_twitter_mentions
+from services.tiktok_viral import get_twitter_mentions
 from utils.logger import get_logger
 
 logger = get_logger(__name__)

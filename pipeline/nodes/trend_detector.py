@@ -1,7 +1,7 @@
-"""Node 1 — trend_detector: Extract viral topics from TikTok."""
+"""Node 1 — trend_detector: Fetch viral topics from Google Trends RSS."""
 
 from pipeline.state import PipelineState
-from services.tiktok import fetch_tiktok_trends
+from services.trends_rss import fetch_tiktok_trends
 from utils.logger import get_logger
 
 logger = get_logger(__name__)

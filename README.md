@@ -91,8 +91,8 @@ crypto-scout/
 │       ├── wallet_analyzer.py     # Node 5: on-chain wallets
 │       └── scorer.py              # Node 6: scoring + verdict
 └── services/
-    ├── tiktok.py                  # Google Trends RSS (trend discovery)
-    ├── twitter.py                 # Apify TikTok viral count (social signal)
+    ├── trends_rss.py              # Google Trends RSS (trend discovery)
+    ├── tiktok_viral.py            # Apify TikTok viral count (social signal)
     ├── google_trends.py           # Google Trends interest validation
     ├── dexscreener.py             # DEX pair data
     ├── coingecko.py               # Market data
