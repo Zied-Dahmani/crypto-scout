@@ -101,6 +101,27 @@ crypto-scout/
     └── discord.py                 # Webhook alerts
 ```
 
+## Discord Card Layout
+
+Each opportunity arrives as a Discord embed:
+
+```
+🟡 WATCH — BUNDO
+Bundo Coin  ← clickable → DEXScreener chart
+7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU  ← full contract address
+
+Trend (→ Google Trends) | Score | 🟡 Age
+Market Cap               | Volume 24h | Price Change
+Price                    |
+
+🔢 Breakdown
+trend 0.71 · market 0.62 · smart money 0.48
+```
+
+- **Coin name** → opens DEXScreener chart
+- **Trend** → opens Google Trends for that keyword
+- **Age** color: 🟢 < 1h · 🟡 < 24h · ⚪ older
+
 ## Updating Trend Keywords Manually
 
 If the bot misses a viral trend you spotted, edit `services/tiktok.py` mock list and push to `dev`. The mock list is the fallback used when Google Trends RSS is unavailable.
