@@ -70,6 +70,7 @@ def _from_dex(match: dict) -> TokenMarketData | None:
         "current_price": price,
         "contract_address": contract,
         "blockchain": blockchain,
+        "pair_created_at": int(pair.get("pairCreatedAt") or 0),
     }
 
 
@@ -100,6 +101,7 @@ def _from_coingecko(match: dict, raw_by_id: dict) -> TokenMarketData | None:
         "current_price": float(raw.get("current_price") or 0),
         "contract_address": contract_address,
         "blockchain": blockchain,
+        "pair_created_at": 0,
     }
 
 

@@ -48,6 +48,7 @@ class TokenMarketData(TypedDict):
     current_price: float
     contract_address: str       # ERC-20 / BEP-20 contract (empty if unknown)
     blockchain: str             # e.g. "ethereum", "solana", "" if unknown
+    pair_created_at: int        # ms epoch timestamp from DEXScreener (0 if unknown)
 
 
 class WalletInfo(TypedDict):
@@ -78,6 +79,9 @@ class Opportunity(TypedDict):
     volume_24h: float
     price_change_24h: float
     current_price: float
+    contract_address: str   # on-chain address
+    blockchain: str         # "solana", "ethereum", "bsc", etc.
+    pair_created_at: int    # ms epoch timestamp (0 if unknown)
 
 
 class PipelineState(TypedDict):
