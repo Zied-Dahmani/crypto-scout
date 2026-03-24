@@ -87,6 +87,9 @@ def scorer(state: PipelineState) -> dict:
                 "volume_24h": token["volume_24h"],
                 "price_change_24h": token["price_change_24h"],
                 "current_price": token["current_price"],
+                "contract_address": token.get("contract_address", ""),
+                "blockchain": token.get("blockchain", ""),
+                "pair_created_at": token.get("pair_created_at", 0),
             }
         )
 
