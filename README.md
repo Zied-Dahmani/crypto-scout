@@ -5,12 +5,14 @@ Bot that detects what's going viral right now, finds the matching micro-cap meme
 ## How It Works
 
 ```
-Google Trends RSS (what's viral now)
-  → Validate: Google Trends + TikTok viral videos (Apify)
-  → Find token: DEXScreener (newest first) + CoinGecko fallback
-  → Analyze: live price, volume, liquidity, market cap
-  → Check wallets: smart-money early buyers (Etherscan / Solscan)
-  → Score → Discord alert
+1. trends_rss.py    — Google Trends RSS fetches what's viral right now (8 regions)
+2. tiktok_viral.py  — Apify searches each keyword on TikTok, counts viral videos
+3. google_trends.py — pytrends validates interest is rising (not just a spike)
+4. token_finder     — DEXScreener finds the coin (newest first), CoinGecko fallback
+5. market_analyzer  — Fetches live price, volume, liquidity, market cap
+6. wallet_analyzer  — Checks early buyers on Etherscan (ETH) / Solscan (SOL)
+7. scorer           — Composite score → BUY / WATCH / SKIP
+8. discord          — Alert sent every 6 hours
 ```
 
 **The edge:** a person/meme/animal goes viral on Google → someone launches a memecoin → bot finds it at $50k–$5M market cap before the crowd.
@@ -19,8 +21,8 @@ Google Trends RSS (what's viral now)
 
 | Step | Node | Data source | Status |
 |------|------|-------------|--------|
-| 1 | `trend_detector` | Google Trends RSS (US, CA, GB, FR, DE, JP, KR, AU, CN) | **Real** |
-| 2 | `trend_validator` | Google Trends interest + Apify TikTok viral count | **Real** |
+| 1 | `trend_detector` | Google Trends RSS — US, CA, GB, FR, DE, JP, KR, AU (CN excluded) | **Real** |
+| 2 | `trend_validator` | Google Trends interest (pytrends) + Apify TikTok viral video count | **Real** |
 | 3 | `token_finder` | DEXScreener + CoinGecko | **Real** |
 | 4 | `market_analyzer` | DEXScreener + CoinGecko | **Real** |
 | 5 | `wallet_analyzer` | Etherscan (ETH) + Solscan (SOL) | **Real** |
