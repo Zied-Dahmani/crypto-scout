@@ -60,53 +60,28 @@ def _build_embed(opp: dict) -> dict:
     age_emoji = _age_emoji(opp.get("pair_created_at", 0))
     chart_url = _dexscreener_url(opp)
 
-    # Contract address line (truncated, copyable in description)
-    desc_parts = []
-    if contract:
-        desc_parts.append(f"`{_truncate_address(contract)}`")
-        desc_parts.append(f"[📋 Copy]({chart_url}) · [📊 Chart]({chart_url})")
-    description = "  ".join(desc_parts) if desc_parts else ""
+    keyword_url = (
+        "https://trends.google.com/trends/explore?q="
+        + opp["trend_keyword"].replace(" ", "+")
+        + "&date=now+7-d"
+    )
 
     return {
-        "title": f"{icon} {verdict} — {opp['symbol']}  ({opp['name']})",
-        "description": description,
+        "title": f"{icon} {verdict} — {opp['symbol']}",
+        "description": f"**[{opp['name']}]({chart_url})**\n`{contract}`" if contract else f"**[{opp['name']}]({chart_url})**",
         "color": _COLOR.get(verdict, 0x888888),
         "fields": [
-            {
-                "name": "📈 Trend",
-                "value": opp["trend_keyword"],
-                "inline": True,
-            },
-            {
-                "name": "⚡ Score",
-                "value": f"{opp['score']:.3f}",
-                "inline": True,
-            },
-            {
-                "name": f"{age_emoji} Age",
-                "value": age,
-                "inline": True,
-            },
-            {
-                "name": "💰 Market Cap",
-                "value": f"[${opp['market_cap']:,.0f}]({chart_url})",
-                "inline": True,
-            },
-            {
-                "name": "📊 Volume 24h",
-                "value": f"${opp['volume_24h']:,.0f}",
-                "inline": True,
-            },
-            {
-                "name": "🕯️ Price Change",
-                "value": f"{opp['price_change_24h']:+.1f}%",
-                "inline": True,
-            },
-            {
-                "name": "💵 Price",
-                "value": f"${opp['current_price']:.8f}",
-                "inline": True,
-            },
+            # Row 1
+            {"name": "📈 Trend",        "value": f"[{opp['trend_keyword']}]({keyword_url})", "inline": True},
+            {"name": "⚡ Score",         "value": f"{opp['score']:.3f}",                      "inline": True},
+            {"name": f"{age_emoji} Age", "value": age,                                         "inline": True},
+            # Row 2
+            {"name": "💰 Market Cap",   "value": f"${opp['market_cap']:,.0f}",                "inline": True},
+            {"name": "📊 Volume 24h",   "value": f"${opp['volume_24h']:,.0f}",                "inline": True},
+            {"name": "🕯️ Price Change", "value": f"{opp['price_change_24h']:+.1f}%",          "inline": True},
+            # Row 3
+            {"name": "💵 Price",        "value": f"${opp['current_price']:.8f}",              "inline": True},
+            # Breakdown — full width
             {
                 "name": "🔢 Breakdown",
                 "value": (
